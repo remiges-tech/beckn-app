@@ -78,7 +78,7 @@ func (s *SelectService) ProcessSelect(ctx context.Context, req *SelectRequest) {
 		MessageID:            inboundMsgID,
 		Action:               dbsqlc.BecknActionSelect,
 		Direction:            dbsqlc.MessageDirectionINBOUND,
-		Url:                  strPtr("/beckn/select"),
+		Url:                  strPtr("/webhook/select"),
 		BapID:                strPtr(req.Context.BapID),
 		BapUri:               strPtr(req.Context.BapURI),
 		BppID:                strPtr(req.Context.BppID),
@@ -270,7 +270,7 @@ func (s *SelectService) callOnSelect(
 			NetworkID:            strPtr(req.Context.NetworkID),
 			AckStatus:            ackStatus,
 			RequestPayload:       reqJSON,
-			ResponsePayload:      json.RawMessage(respBody),
+			ResponsePayload:      rawMessageOrNull(respBody),
 			ErrorMessage:         errStrPtr(callErr),
 			ProcessingDurationMs: durationMs(start),
 		})
@@ -354,6 +354,16 @@ func mergePrice(raw json.RawMessage, unitPrice float64, currency string, qty flo
 	m["totalPrice"] = totalJSON
 	merged, _ := json.Marshal(m)
 	return merged
+}
+
+// rawMessageOrNull returns nil (SQL NULL) when b is empty so that
+// pgx does not send an empty byte slice to a JSONB column, which
+// Postgres rejects as invalid JSON.
+func rawMessageOrNull(b []byte) json.RawMessage {
+	if len(b) == 0 {
+		return nil
+	}
+	return json.RawMessage(b)
 }
 
 func strPtr(s string) *string {

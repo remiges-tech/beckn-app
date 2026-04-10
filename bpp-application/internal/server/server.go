@@ -10,6 +10,8 @@ import (
 
 	"github.com/ion/winroom/bpp/internal/catalog"
 	"github.com/ion/winroom/bpp/internal/config"
+	"github.com/ion/winroom/bpp/internal/confirmsvc"
+	"github.com/ion/winroom/bpp/internal/initsvc"
 	"github.com/ion/winroom/bpp/internal/selectsvc"
 )
 
@@ -45,14 +47,14 @@ func RegisterRoutes(svc *service.Service, cfg *config.Config) {
 	svc.RegisterRoute(http.MethodGet, "/health", handleHealth)
 
 	// Provider-facing catalog publish API (simplified — no Beckn context required from provider)
-	v1 := svc.Router.Group("/v1")
+	v1 := svc.Router.Group("/api/v1")
 	registerProviderCatalogRoutes(svc, v1, pool, cfg)
 
-	beckn := svc.Router.Group("/beckn")
-	registerTransactionRoutes(svc, beckn, pool, cfg)
-	registerFulfillmentRoutes(svc, beckn)
-	registerPostFulfillmentRoutes(svc, beckn)
-	registerBecknCatalogRoutes(svc, beckn)
+	webhook := svc.Router.Group("/api/webhook")
+	registerTransactionRoutes(svc, webhook, pool, cfg)
+	registerFulfillmentRoutes(svc, webhook)
+	registerPostFulfillmentRoutes(svc, webhook)
+	registerBecknCatalogRoutes(svc, webhook)
 }
 
 func handleHealth(c *gin.Context, _ *service.Service) {
@@ -65,22 +67,16 @@ func handleHealth(c *gin.Context, _ *service.Service) {
 
 func registerTransactionRoutes(svc *service.Service, g *gin.RouterGroup, pool *pgxpool.Pool, cfg *config.Config) {
 	selectH := selectsvc.NewSelectHandler(pool, cfg, svc.LogHarbour)
-	// /beckn/select must bypass Alya's handler wrapper to return a raw Beckn ACK
-	// (not wrapped in wscutils.Response) and kick off async processing.
+	// /webhook/select — raw Gin handler; returns Beckn ACK immediately, processes async.
 	g.POST("/select", selectH.Handle)
 
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/init", handleInit)
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/confirm", handleConfirm)
-}
+	// /webhook/init — persists contract state, fires on_init callback.
+	initH := initsvc.NewInitHandler(pool, cfg, svc.LogHarbour)
+	g.POST("/init", initH.Handle)
 
-func handleInit(c *gin.Context, svc *service.Service) {
-	// TODO: draft contract with billing/fulfillment details, fire async on_init callback to BAP
-	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
-}
-
-func handleConfirm(c *gin.Context, svc *service.Service) {
-	// TODO: confirm contract, fire async on_confirm callback to BAP
-	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
+	// /webhook/confirm — transitions DRAFT→ACTIVE, fires on_confirm callback.
+	confirmH := confirmsvc.NewConfirmHandler(pool, cfg, svc.LogHarbour)
+	g.POST("/confirm", confirmH.Handle)
 }
 
 // ---------------------------------------------------------------------------

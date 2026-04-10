@@ -1,0 +1,97 @@
+name: beckn-app
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared Beckn network: BPP ↔ BAP ↔ ONIX adapter ↔ Postgres
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ─── Postgres (shared, two databases: bpp / bap) ──────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres # default db (not used by services)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh:ro
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - beckn
+
+  # ─── BPP Application ──────────────────────────────────────────────────────
+  bpp:
+    build:
+      context: ./bpp-application
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_PORT: "8080"
+      APP_ENV: development
+
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: bpp
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_SSLMODE: disable
+
+      LOG_LEVEL: info
+
+      BPP_ID: bpptest1.remiges.tech
+      BPP_URI: http://bpp:8080
+      NETWORK_ID: beckn.one/ion-retail
+
+      CDS_PUBLISH_URL: "" # set if you have a CDS endpoint
+    ports:
+      - "8080:8080"
+    networks:
+      - beckn
+
+  # ─── BAP Application ──────────────────────────────────────────────────────
+  bap:
+    build:
+      context: ./bap-application
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_PORT: "8082"
+      APP_ENV: development
+
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: bap
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_SSLMODE: disable
+
+      LOG_LEVEL: info
+
+      BAP_ID: sandbox.food-finder.com
+      BAP_URI: http://bap:8082/api/webhook
+      NETWORK_ID: beckn.one/ion-retail
+    ports:
+      - "8082:8082"
+    networks:
+      - beckn
+
+volumes:
+  postgres_data:
+
+
+networks:
+  beckn:
+    driver: bridge
