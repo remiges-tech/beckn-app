@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/remiges-tech/logharbour/logharbour"
 
+	"github.com/ion/winroom/bap/internal/clientsvc"
 	"github.com/ion/winroom/bap/internal/config"
 	onconfirmsvc "github.com/ion/winroom/bap/internal/on_confirm_svc"
 	oninitsvc "github.com/ion/winroom/bap/internal/on_init_svc"
@@ -31,5 +32,17 @@ func RegisterRoutes(r *gin.Engine, pool *pgxpool.Pool, cfg *config.Config, lh *l
 
 		onConfirmH := onconfirmsvc.NewOnConfirmHandler(pool, cfg, lh)
 		webhook.POST("/on_confirm", onConfirmH.Handle)
+	}
+
+	// Client-facing APIs for the React frontend
+	v1 := r.Group("/api/v1")
+	{
+		clientH := clientsvc.NewClientHandler(pool, cfg, lh)
+		v1.GET("/catalog", clientH.HandleCatalog)
+		v1.GET("/discover", clientH.HandleDiscover)
+		v1.POST("/select", clientH.HandleSelect)
+		v1.POST("/init", clientH.HandleInit)
+		v1.POST("/confirm", clientH.HandleConfirm)
+		v1.GET("/status/:id", clientH.HandleStatus)
 	}
 }

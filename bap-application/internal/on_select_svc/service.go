@@ -67,7 +67,7 @@ func (s *OnSelectService) Process(ctx context.Context, req *OnSelectRequest) {
 		MessageID:            msgID,
 		Action:               dbsqlc.BecknActionOnSelect,
 		Direction:            dbsqlc.MessageDirectionINBOUND,
-		Url:                  strPtr("/webhook/on_select"),
+		Url:                  strPtr("/api/webhook/on_select"),
 		BapID:                strPtr(req.Context.BapID),
 		BapUri:               strPtr(req.Context.BapURI),
 		BppID:                strPtr(req.Context.BppID),

@@ -70,7 +70,7 @@ func (s *OnInitService) Process(ctx context.Context, req *OnInitRequest) {
 		MessageID:            msgID,
 		Action:               dbsqlc.BecknActionOnInit,
 		Direction:            dbsqlc.MessageDirectionINBOUND,
-		Url:                  strPtr("/webhook/on_init"),
+		Url:                  strPtr("/api/webhook/on_init"),
 		BapID:                strPtr(req.Context.BapID),
 		BapUri:               strPtr(req.Context.BapURI),
 		BppID:                strPtr(req.Context.BppID),

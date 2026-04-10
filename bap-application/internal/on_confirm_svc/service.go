@@ -69,7 +69,7 @@ func (s *OnConfirmService) Process(ctx context.Context, req *OnConfirmRequest) {
 		MessageID:            msgID,
 		Action:               dbsqlc.BecknActionOnConfirm,
 		Direction:            dbsqlc.MessageDirectionINBOUND,
-		Url:                  strPtr("/webhook/on_confirm"),
+		Url:                  strPtr("/api/webhook/on_confirm"),
 		BapID:                strPtr(req.Context.BapID),
 		BapUri:               strPtr(req.Context.BapURI),
 		BppID:                strPtr(req.Context.BppID),

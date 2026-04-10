@@ -24,12 +24,17 @@ type Config struct {
 	BapID     string // Subscriber ID registered on the Beckn network
 	BapURI    string // Callback URL the BAP exposes (where BPP sends on_* callbacks)
 	NetworkID string // Beckn network identifier
+
+	// CDSDiscoverURL is the full URL of the Catalog Discovery Service discover endpoint.
+	// Example: https://cds.example.com/discover
+	// Leave blank in environments without a live CDS (returns empty catalog list).
+	CDSDiscoverURL string
 }
 
 // Load reads all config values from the environment and returns a validated Config.
 func Load() (*Config, error) {
 	cfg := &Config{
-		AppPort: getEnv("APP_PORT", "8082"),
+		AppPort: getEnv("APP_PORT", "8083"),
 		AppEnv:  getEnv("APP_ENV", "development"),
 
 		DBHost:     getEnv("DB_HOST", "localhost"),
@@ -44,6 +49,8 @@ func Load() (*Config, error) {
 		BapID:     os.Getenv("BAP_ID"),
 		BapURI:    os.Getenv("BAP_URI"),
 		NetworkID: os.Getenv("NETWORK_ID"),
+
+		CDSDiscoverURL: os.Getenv("CDS_DISCOVER_URL"),
 	}
 
 	if err := cfg.validate(); err != nil {

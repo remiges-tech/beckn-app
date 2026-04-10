@@ -22,6 +22,6 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /bap-server /bap-server
 
-EXPOSE 8082
+EXPOSE 8083
 
 ENTRYPOINT ["/bap-server"]

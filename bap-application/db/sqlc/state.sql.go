@@ -40,15 +40,39 @@ func (q *Queries) GetContractSnapshot(ctx context.Context, arg GetContractSnapsh
 	return i, err
 }
 
-const getTransactionByID = `-- name: GetTransactionByID :one
+const getLatestContractSnapshot = `-- name: GetLatestContractSnapshot :one
+SELECT id, transaction_id, action, contract_id, contract, created_at, updated_at
+FROM contract_snapshots
+WHERE transaction_id = $1
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+// Returns the latest snapshot for a transaction (highest priority action).
+func (q *Queries) GetLatestContractSnapshot(ctx context.Context, transactionID uuid.UUID) (ContractSnapshot, error) {
+	row := q.db.QueryRow(ctx, getLatestContractSnapshot, transactionID)
+	var i ContractSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.TransactionID,
+		&i.Action,
+		&i.ContractID,
+		&i.Contract,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTransaction = `-- name: GetTransaction :one
 SELECT transaction_id, bap_id, network_id, bpp_id, bpp_uri, status, created_at, updated_at
 FROM transactions
 WHERE transaction_id = $1
 `
 
 // Returns the transaction row for the given transaction UUID.
-func (q *Queries) GetTransactionByID(ctx context.Context, transactionID uuid.UUID) (Transaction, error) {
-	row := q.db.QueryRow(ctx, getTransactionByID, transactionID)
+func (q *Queries) GetTransaction(ctx context.Context, transactionID uuid.UUID) (Transaction, error) {
+	row := q.db.QueryRow(ctx, getTransaction, transactionID)
 	var i Transaction
 	err := row.Scan(
 		&i.TransactionID,

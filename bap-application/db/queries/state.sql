@@ -19,7 +19,7 @@ ON CONFLICT (transaction_id, action) DO UPDATE SET
     contract    = EXCLUDED.contract,
     updated_at  = NOW();
 
--- name: GetTransactionByID :one
+-- name: GetTransaction :one
 -- Returns the transaction row for the given transaction UUID.
 SELECT transaction_id, bap_id, network_id, bpp_id, bpp_uri, status, created_at, updated_at
 FROM transactions
@@ -31,3 +31,11 @@ SELECT id, transaction_id, action, contract_id, contract, created_at, updated_at
 FROM contract_snapshots
 WHERE transaction_id = $1
   AND action = $2;
+
+-- name: GetLatestContractSnapshot :one
+-- Returns the latest snapshot for a transaction (highest priority action).
+SELECT id, transaction_id, action, contract_id, contract, created_at, updated_at
+FROM contract_snapshots
+WHERE transaction_id = $1
+ORDER BY created_at DESC
+LIMIT 1;

@@ -6,13 +6,13 @@ endif
 
 .PHONY: run build tidy migrate-up migrate-down migrate-status sqlc
 
-## run: start the BPP server (loads .env automatically)
+## run: start the BAP server (loads .env automatically)
 run:
 	go run ./cmd/server/...
 
-## build: compile the server binary to ./bin/bpp
+## build: compile the server binary to ./bin/bap
 build:
-	go build -o bin/bpp ./cmd/server/...
+	go build -o bin/bap ./cmd/server/...
 
 ## tidy: sync go.mod / go.sum
 tidy:
