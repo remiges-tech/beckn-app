@@ -1,0 +1,107 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+// Config holds all runtime configuration for the BPP application.
+// Values are read from environment variables (populated via .env in development).
+type Config struct {
+	AppPort string
+	AppEnv  string
+
+	DBHost     string
+	DBPort     string
+	DBName     string
+	DBUser     string
+	DBPassword string
+	DBSSLMode  string
+
+	// LogLevel controls the minimum priority emitted by logharbour.
+	// Accepted values: debug2 | debug1 | debug0 | info | warn | err | crit | sec
+	LogLevel string
+
+	// Beckn network identity for this BPP.
+	BppID     string // Subscriber ID registered on the Beckn network (e.g. "bpptest1.remiges.tech")
+	BppURI    string // Callback URL the BPP exposes to the network (e.g. "https://bpptest1.remiges.tech/callback")
+	NetworkID string // Beckn network identifier (e.g. "beckn.one/ion-retail")
+
+	// CDSPublishURL is the catalog discovery service endpoint that receives catalog/publish requests.
+	CDSPublishURL string
+}
+
+// Load reads all config values from the environment and returns a validated Config.
+func Load() (*Config, error) {
+	cfg := &Config{
+		AppPort: getEnv("APP_PORT", "8080"),
+		AppEnv:  getEnv("APP_ENV", "development"),
+
+		DBHost:     getEnv("DB_HOST", "localhost"),
+		DBPort:     getEnv("DB_PORT", "5432"),
+		DBName:     getEnv("DB_NAME", "bpp"),
+		DBUser:     getEnv("DB_USER", "postgres"),
+		DBPassword: os.Getenv("DB_PASSWORD"),
+		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
+
+		LogLevel: getEnv("LOG_LEVEL", "info"),
+
+		BppID:     os.Getenv("BPP_ID"),
+		BppURI:    os.Getenv("BPP_URI"),
+		NetworkID: os.Getenv("NETWORK_ID"),
+
+		CDSPublishURL: os.Getenv("CDS_PUBLISH_URL"),
+	}
+
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// DatabaseURL builds a pgx-compatible DSN from the config fields.
+func (c *Config) DatabaseURL() string {
+	return fmt.Sprintf(
+		"host=%s port=%s dbname=%s user=%s password=%s sslmode=%s",
+		c.DBHost, c.DBPort, c.DBName, c.DBUser, c.DBPassword, c.DBSSLMode,
+	)
+}
+
+// DBPortInt returns the DB port as an integer.
+func (c *Config) DBPortInt() int {
+	p, _ := strconv.Atoi(c.DBPort)
+	return p
+}
+
+// IsProduction reports whether the application is running in production mode.
+func (c *Config) IsProduction() bool {
+	return c.AppEnv == "production"
+}
+
+func (c *Config) validate() error {
+	if c.DBName == "" {
+		return fmt.Errorf("DB_NAME is required")
+	}
+	if c.DBUser == "" {
+		return fmt.Errorf("DB_USER is required")
+	}
+	if c.BppID == "" {
+		return fmt.Errorf("BPP_ID is required")
+	}
+	if c.BppURI == "" {
+		return fmt.Errorf("BPP_URI is required")
+	}
+	if c.NetworkID == "" {
+		return fmt.Errorf("NETWORK_ID is required")
+	}
+	return nil
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}

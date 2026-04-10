@@ -1,0 +1,383 @@
+{
+  "info": {
+    "_postman_id": "bpp-provider-api-v1",
+    "name": "BPP — Provider & Beckn API",
+    "description": "All BPP endpoints — provider-facing catalog publish and Beckn transaction endpoints (BAP → BPP).\n\n**Base URL:** `{{base_url}}`  (default: http://localhost:8080)\n\n**Import the environment file** `bpp-provider-api.postman_environment.json` alongside this collection.\n\n## Flows\n\n### Catalog publish\n`POST /v1/catalog/publish` — provider pushes catalog; BPP saves to DB and forwards to CDS.\n\n### Select / on_select\n`POST /beckn/select` — BAP asks for pricing on specific offers.  \nThe BPP returns an immediate ACK, looks up inventory in the DB, calculates pricing, and fires `on_select` to `{context.bapUri}/on_select` asynchronously.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Liveness probe used by load balancers and Kubernetes. Returns `{\"status\":\"ok\"}` when the server is up."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "url": { "raw": "{{base_url}}/health" }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": \"success\",\n  \"data\": { \"status\": \"ok\" },\n  \"messages\": null\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "description": "Catalog management endpoints. Providers publish their product/service catalogs here. The BPP saves them to its database and forwards a Beckn-compatible request to the Catalog Discovery Service (CDS).",
+      "item": [
+        {
+          "name": "Publish Catalog (full example)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is ACK', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('success');",
+                  "    pm.expect(body.data.status).to.eql('ACK');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/catalog/publish",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "catalog", "publish"]
+            },
+            "description": "Publish one or more catalogs to the BPP.\n\nThe BPP will:\n1. Validate the payload.\n2. Upsert providers, locations, catalogs, resources, and offers in the database.\n3. Forward a Beckn `catalog/publish` request (with context injected from config) to the CDS.\n4. Return `{\"status\":\"ACK\"}` on success.\n\n**Each catalog contains:**\n- `id` — unique catalog identifier (string, provider-assigned)\n- `descriptor` — name, shortDesc, etc.\n- `provider` — the merchant / store information + location(s)\n- `resources[]` — individual products/services\n- `offers[]` — pricing + availability bundles linking resources to providers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"catalogs\": [\n        {\n            \"id\": \"CAT-GROCERY-FRESHMART-ION-007\",\n            \"descriptor\": {\n                \"name\": \"FreshMart Grocery Catalog\",\n                \"shortDesc\": \"Daily essentials — tea, coffee & beverages\"\n            },\n            \"provider\": {\n                \"id\": \"PROV-FRESHMART-ION-05\",\n                \"descriptor\": {\n                    \"name\": \"FreshMart Pvt Ltd\"\n                },\n                \"availableAt\": [\n                    {\n                        \"geo\": {\n                            \"type\": \"Point\",\n                            \"coordinates\": [77.6401, 12.9116]\n                        },\n                        \"address\": {\n                            \"streetAddress\": \"27th Main Rd, Sector 2, HSR Layout\",\n                            \"addressLocality\": \"Bengaluru\",\n                            \"addressRegion\": \"Karnataka\",\n                            \"postalCode\": \"560102\",\n                            \"addressCountry\": \"IN\"\n                        }\n                    }\n                ]\n            },\n            \"resources\": [\n                {\n                    \"id\": \"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\",\n                    \"descriptor\": {\n                        \"name\": \"Bru Gold Instant Coffee Powder\",\n                        \"shortDesc\": \"Rich and aromatic instant coffee powder, 200g\",\n                        \"longDesc\": \"Bru Gold is a premium blend of coffee and chicory, crafted for those who love a rich, flavourful cup. Made from handpicked coffee beans roasted to perfection, this instant coffee powder dissolves quickly to give you a smooth, aromatic brew every time.\",\n                        \"mediaFile\": [\n                            {\n                                \"uri\": \"https://www.jiomart.com/images/product/original/599173064/599173064.jpg\",\n                                \"mimeType\": \"image/jpeg\",\n                                \"label\": \"Product image\"\n                            }\n                        ]\n                    },\n                    \"resourceAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/GroceryResource/v2.1/context.jsonld\",\n                        \"@type\": \"GroceryResourceAttributes\",\n                        \"identity\": {\n                            \"brand\": \"Bru\",\n                            \"originCountry\": \"IN\"\n                        },\n                        \"physical\": {\n                            \"weight\": {\n                                \"@type\": \"schema:QuantitativeValue\",\n                                \"value\": 200,\n                                \"unitText\": \"G\"\n                            }\n                        },\n                        \"food\": {\n                            \"classification\": \"VEG\"\n                        },\n                        \"packagedGoodsDeclaration\": {\n                            \"manufacturerOrPacker\": {\n                                \"type\": \"MANUFACTURER\",\n                                \"name\": \"Hindustan Unilever Limited\",\n                                \"id\": \"HUL-KA-1001\",\n                                \"address\": \"HUL House, 165-166 Backbay Reclamation, Mumbai, Maharashtra, 400020, IN\"\n                            },\n                            \"commonOrGenericName\": \"Instant Coffee and Chicory Powder\",\n                            \"netQuantity\": {\n                                \"@type\": \"schema:QuantitativeValue\",\n                                \"value\": 200,\n                                \"unitText\": \"G\"\n                            },\n                            \"manufacturePackingImportDate\": { \"month\": 1, \"year\": 2026 }\n                        },\n                        \"foodRegulatoryDeclaration\": {\n                            \"registrations\": [\n                                { \"scheme\": \"FSSAI\", \"id\": \"10013022002253\", \"role\": \"MANUFACTURER\" }\n                            ],\n                            \"additives\": [\n                                { \"type\": \"FREE_FROM\", \"value\": \"Artificial colours\" },\n                                { \"type\": \"FREE_FROM\", \"value\": \"Preservatives\" }\n                            ]\n                        },\n                        \"nutrition\": [\n                            { \"nutrient\": \"Energy\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 287, \"unitText\": \"KCAL\" } },\n                            { \"nutrient\": \"Protein\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 13.5, \"unitText\": \"G\" } },\n                            { \"nutrient\": \"Caffeine\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 56, \"unitText\": \"MG\" } }\n                        ]\n                    }\n                },\n                {\n                    \"id\": \"RES-GROCERY-NESCAFE-CLASSIC-INSTANT-COFFEE-100GRAMS\",\n                    \"descriptor\": {\n                        \"name\": \"Nescafe Classic Instant Coffee\",\n                        \"shortDesc\": \"Pure soluble coffee, bold and rich, 100g\",\n                        \"longDesc\": \"Nescafe Classic is made from 100% pure coffee beans, carefully selected and roasted to deliver a bold, rich flavour in every cup.\",\n                        \"mediaFile\": [\n                            {\n                                \"uri\": \"https://m.media-amazon.com/images/S/aplus-media/vc/bb6a0196-cad0-4395-b85e-134ef725c0f7._CR0,0,1251,1251_PT0_SX300__.png\",\n                                \"mimeType\": \"image/jpeg\",\n                                \"label\": \"Product image\"\n                            }\n                        ]\n                    },\n                    \"resourceAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/GroceryResource/v2.1/context.jsonld\",\n                        \"@type\": \"GroceryResourceAttributes\",\n                        \"identity\": { \"brand\": \"Nescafe\", \"originCountry\": \"IN\" },\n                        \"physical\": { \"weight\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 100, \"unitText\": \"G\" } },\n                        \"food\": { \"classification\": \"VEG\" },\n                        \"packagedGoodsDeclaration\": {\n                            \"manufacturerOrPacker\": {\n                                \"type\": \"MANUFACTURER\",\n                                \"name\": \"Nestle India Limited\",\n                                \"id\": \"NESTLE-KA-2002\",\n                                \"address\": \"100/101 World Trade Centre, Barakhamba Lane, New Delhi, 110001, IN\"\n                            },\n                            \"commonOrGenericName\": \"Instant Coffee\",\n                            \"netQuantity\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 100, \"unitText\": \"G\" },\n                            \"manufacturePackingImportDate\": { \"month\": 1, \"year\": 2026 }\n                        },\n                        \"foodRegulatoryDeclaration\": {\n                            \"registrations\": [\n                                { \"scheme\": \"FSSAI\", \"id\": \"10013022000743\", \"role\": \"MANUFACTURER\" }\n                            ],\n                            \"additives\": [\n                                { \"type\": \"FREE_FROM\", \"value\": \"Artificial colours\" },\n                                { \"type\": \"FREE_FROM\", \"value\": \"Preservatives\" }\n                            ]\n                        },\n                        \"nutrition\": [\n                            { \"nutrient\": \"Energy\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 353, \"unitText\": \"KCAL\" } },\n                            { \"nutrient\": \"Protein\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 15.4, \"unitText\": \"G\" } },\n                            { \"nutrient\": \"Caffeine\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 67, \"unitText\": \"MG\" } }\n                        ]\n                    }\n                },\n                {\n                    \"id\": \"RES-GROCERY-TATA-PREMIUM-LEAF-TEA-500GRAMS\",\n                    \"descriptor\": {\n                        \"name\": \"Tata Tea Premium Leaf\",\n                        \"shortDesc\": \"Strong and fresh tea powder, 500g\",\n                        \"longDesc\": \"Tata Tea Premium is a carefully blended tea made from the finest tea leaves sourced from the lush gardens of Assam and Darjeeling.\",\n                        \"mediaFile\": [\n                            {\n                                \"uri\": \"https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&q=80\",\n                                \"mimeType\": \"image/jpeg\",\n                                \"label\": \"Product image\"\n                            }\n                        ]\n                    },\n                    \"resourceAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/GroceryResource/v2.1/context.jsonld\",\n                        \"@type\": \"GroceryResourceAttributes\",\n                        \"identity\": { \"brand\": \"Tata Tea\", \"originCountry\": \"IN\" },\n                        \"physical\": { \"weight\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 500, \"unitText\": \"G\" } },\n                        \"food\": { \"classification\": \"VEG\" },\n                        \"packagedGoodsDeclaration\": {\n                            \"manufacturerOrPacker\": {\n                                \"type\": \"MANUFACTURER\",\n                                \"name\": \"Tata Consumer Products Limited\",\n                                \"id\": \"TATA-KA-3003\",\n                                \"address\": \"1 Bishop Lefroy Road, Kolkata, West Bengal, 700020, IN\"\n                            },\n                            \"commonOrGenericName\": \"Blended Tea\",\n                            \"netQuantity\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 500, \"unitText\": \"G\" },\n                            \"manufacturePackingImportDate\": { \"month\": 1, \"year\": 2026 }\n                        },\n                        \"foodRegulatoryDeclaration\": {\n                            \"registrations\": [\n                                { \"scheme\": \"FSSAI\", \"id\": \"10013022003891\", \"role\": \"MANUFACTURER\" }\n                            ],\n                            \"additives\": [\n                                { \"type\": \"FREE_FROM\", \"value\": \"Artificial colours\" },\n                                { \"type\": \"FREE_FROM\", \"value\": \"Preservatives\" }\n                            ]\n                        },\n                        \"nutrition\": [\n                            { \"nutrient\": \"Energy\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 4, \"unitText\": \"KCAL\" } },\n                            { \"nutrient\": \"Caffeine\", \"value\": { \"@type\": \"schema:QuantitativeValue\", \"value\": 30, \"unitText\": \"MG\" } }\n                        ]\n                    }\n                }\n            ],\n            \"offers\": [\n                {\n                    \"id\": \"OFFER-BRU-GOLD-200G-005\",\n                    \"descriptor\": {\n                        \"name\": \"Bru Gold Instant Coffee 200g\",\n                        \"shortDesc\": \"MRP for Bru Gold Instant Coffee Powder 200g\"\n                    },\n                    \"resourceIds\": [\"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\"],\n                    \"provider\": {\n                        \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\",\n                        \"descriptor\": { \"name\": \"FreshMart Koramangala\" },\n                        \"availableAt\": [\n                            {\n                                \"geo\": { \"type\": \"Point\", \"coordinates\": [77.6245, 12.9352] },\n                                \"address\": {\n                                    \"streetAddress\": \"80 Feet Rd, 4th Block, Koramangala\",\n                                    \"addressLocality\": \"Bengaluru\",\n                                    \"addressRegion\": \"Karnataka\",\n                                    \"postalCode\": \"560034\",\n                                    \"addressCountry\": \"IN\"\n                                }\n                            }\n                        ]\n                    },\n                    \"validity\": {\n                        \"startDate\": \"2026-04-01T00:00:00Z\",\n                        \"endDate\": \"2026-06-30T23:59:59Z\"\n                    },\n                    \"offerAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/RetailOffer/v2.1/context.jsonld\",\n                        \"@type\": \"RetailOffer\",\n                        \"policies\": {\n                            \"returns\": { \"allowed\": true, \"window\": \"P7D\", \"method\": \"SELLER_PICKUP\" }\n                        },\n                        \"paymentConstraints\": { \"codAvailable\": true },\n                        \"serviceability\": {\n                            \"distanceConstraint\": { \"maxDistance\": 10, \"unit\": \"KM\" },\n                            \"timing\": [\n                                {\n                                    \"daysOfWeek\": [\"MON\", \"TUE\", \"WED\", \"THU\", \"FRI\", \"SAT\"],\n                                    \"timeRange\": { \"start\": \"08:00\", \"end\": \"21:00\" }\n                                }\n                            ]\n                        }\n                    },\n                    \"considerations\": [\n                        {\n                            \"id\": \"CONSIDERATION-BRU-GOLD-005\",\n                            \"status\": { \"name\": \"ACTIVE\" },\n                            \"considerationAttributes\": {\n                                \"@context\": \"https://schema.beckn.io/RetailConsideration/v2.1/context.jsonld\",\n                                \"@type\": \"RetailConsideration\",\n                                \"currency\": \"INR\",\n                                \"breakup\": [\n                                    { \"title\": \"Bru Gold Instant Coffee 200g (MRP)\", \"amount\": 375, \"type\": \"BASE_PRICE\" }\n                                ],\n                                \"totalAmount\": 375\n                            }\n                        }\n                    ]\n                },\n                {\n                    \"id\": \"OFFER-NESCAFE-CLASSIC-100G-005\",\n                    \"descriptor\": {\n                        \"name\": \"Nescafe Classic 100g\",\n                        \"shortDesc\": \"MRP for Nescafe Classic Instant Coffee 100g\"\n                    },\n                    \"resourceIds\": [\"RES-GROCERY-NESCAFE-CLASSIC-INSTANT-COFFEE-100GRAMS\"],\n                    \"provider\": {\n                        \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\",\n                        \"descriptor\": { \"name\": \"FreshMart Koramangala\" },\n                        \"availableAt\": [\n                            {\n                                \"geo\": { \"type\": \"Point\", \"coordinates\": [77.6245, 12.9352] },\n                                \"address\": {\n                                    \"streetAddress\": \"80 Feet Rd, 4th Block, Koramangala\",\n                                    \"addressLocality\": \"Bengaluru\",\n                                    \"addressRegion\": \"Karnataka\",\n                                    \"postalCode\": \"560034\",\n                                    \"addressCountry\": \"IN\"\n                                }\n                            }\n                        ]\n                    },\n                    \"validity\": {\n                        \"startDate\": \"2026-04-01T00:00:00Z\",\n                        \"endDate\": \"2026-06-30T23:59:59Z\"\n                    },\n                    \"offerAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/RetailOffer/v2.1/context.jsonld\",\n                        \"@type\": \"RetailOffer\",\n                        \"policies\": {\n                            \"returns\": { \"allowed\": true, \"window\": \"P7D\", \"method\": \"SELLER_PICKUP\" }\n                        },\n                        \"paymentConstraints\": { \"codAvailable\": true },\n                        \"serviceability\": {\n                            \"distanceConstraint\": { \"maxDistance\": 10, \"unit\": \"KM\" },\n                            \"timing\": [\n                                {\n                                    \"daysOfWeek\": [\"MON\", \"TUE\", \"WED\", \"THU\", \"FRI\", \"SAT\"],\n                                    \"timeRange\": { \"start\": \"08:00\", \"end\": \"21:00\" }\n                                }\n                            ]\n                        }\n                    },\n                    \"considerations\": [\n                        {\n                            \"id\": \"CONSIDERATION-NESCAFE-005\",\n                            \"status\": { \"name\": \"ACTIVE\" },\n                            \"considerationAttributes\": {\n                                \"@context\": \"https://schema.beckn.io/RetailConsideration/v2.1/context.jsonld\",\n                                \"@type\": \"RetailConsideration\",\n                                \"currency\": \"INR\",\n                                \"breakup\": [\n                                    { \"title\": \"Nescafe Classic Instant Coffee 100g (MRP)\", \"amount\": 285, \"type\": \"BASE_PRICE\" }\n                                ],\n                                \"totalAmount\": 285\n                            }\n                        }\n                    ]\n                },\n                {\n                    \"id\": \"OFFER-TATA-TEA-500G-005\",\n                    \"descriptor\": {\n                        \"name\": \"Tata Tea Premium 500g\",\n                        \"shortDesc\": \"MRP for Tata Tea Premium Leaf 500g\"\n                    },\n                    \"resourceIds\": [\"RES-GROCERY-TATA-PREMIUM-LEAF-TEA-500GRAMS\"],\n                    \"provider\": {\n                        \"id\": \"PROV-FRESHMART-INDIRANAGAR-ION-05\",\n                        \"descriptor\": { \"name\": \"FreshMart Indiranagar\" },\n                        \"availableAt\": [\n                            {\n                                \"geo\": { \"type\": \"Point\", \"coordinates\": [77.641, 12.9784] },\n                                \"address\": {\n                                    \"streetAddress\": \"100 Feet Rd, 12th Main, Indiranagar\",\n                                    \"addressLocality\": \"Bengaluru\",\n                                    \"addressRegion\": \"Karnataka\",\n                                    \"postalCode\": \"560038\",\n                                    \"addressCountry\": \"IN\"\n                                }\n                            }\n                        ]\n                    },\n                    \"validity\": {\n                        \"startDate\": \"2026-04-01T00:00:00Z\",\n                        \"endDate\": \"2026-06-30T23:59:59Z\"\n                    },\n                    \"offerAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/RetailOffer/v2.1/context.jsonld\",\n                        \"@type\": \"RetailOffer\",\n                        \"policies\": {\n                            \"returns\": { \"allowed\": true, \"window\": \"P7D\", \"method\": \"SELLER_PICKUP\" }\n                        },\n                        \"paymentConstraints\": { \"codAvailable\": true },\n                        \"serviceability\": {\n                            \"distanceConstraint\": { \"maxDistance\": 10, \"unit\": \"KM\" },\n                            \"timing\": [\n                                {\n                                    \"daysOfWeek\": [\"MON\", \"TUE\", \"WED\", \"THU\", \"FRI\", \"SAT\"],\n                                    \"timeRange\": { \"start\": \"08:00\", \"end\": \"21:00\" }\n                                }\n                            ]\n                        }\n                    },\n                    \"considerations\": [\n                        {\n                            \"id\": \"CONSIDERATION-TATA-TEA-005\",\n                            \"status\": { \"name\": \"ACTIVE\" },\n                            \"considerationAttributes\": {\n                                \"@context\": \"https://schema.beckn.io/RetailConsideration/v2.1/context.jsonld\",\n                                \"@type\": \"RetailConsideration\",\n                                \"currency\": \"INR\",\n                                \"breakup\": [\n                                    { \"title\": \"Tata Tea Premium Leaf 500g (MRP)\", \"amount\": 340, \"type\": \"BASE_PRICE\" }\n                                ],\n                                \"totalAmount\": 340\n                            }\n                        }\n                    ]\n                },\n                {\n                    \"id\": \"OFFER-GROCERY-COFFEE-BUNDLE-005\",\n                    \"descriptor\": {\n                        \"name\": \"Coffee Lovers Bundle\",\n                        \"shortDesc\": \"All coffee essentials — Bru & Nescafe at 15% off\"\n                    },\n                    \"resourceIds\": [\n                        \"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\",\n                        \"RES-GROCERY-NESCAFE-CLASSIC-INSTANT-COFFEE-100GRAMS\"\n                    ],\n                    \"provider\": {\n                        \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\",\n                        \"descriptor\": { \"name\": \"FreshMart Koramangala\" },\n                        \"availableAt\": [\n                            {\n                                \"geo\": { \"type\": \"Point\", \"coordinates\": [77.6245, 12.9352] },\n                                \"address\": {\n                                    \"streetAddress\": \"80 Feet Rd, 4th Block, Koramangala\",\n                                    \"addressLocality\": \"Bengaluru\",\n                                    \"addressRegion\": \"Karnataka\",\n                                    \"postalCode\": \"560034\",\n                                    \"addressCountry\": \"IN\"\n                                }\n                            }\n                        ]\n                    },\n                    \"validity\": {\n                        \"startDate\": \"2026-04-01T00:00:00Z\",\n                        \"endDate\": \"2026-06-30T23:59:59Z\"\n                    },\n                    \"offerAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/RetailOffer/v2.1/context.jsonld\",\n                        \"@type\": \"RetailOffer\",\n                        \"policies\": {\n                            \"returns\": { \"allowed\": true, \"window\": \"P7D\", \"method\": \"SELLER_PICKUP\" },\n                            \"cancellation\": { \"allowed\": true, \"window\": \"PT2H\", \"cutoffEvent\": \"BEFORE_PACKING\" }\n                        },\n                        \"serviceability\": {\n                            \"distanceConstraint\": { \"maxDistance\": 10, \"unit\": \"KM\" },\n                            \"timing\": [\n                                {\n                                    \"daysOfWeek\": [\"MON\", \"TUE\", \"WED\", \"THU\", \"FRI\", \"SAT\"],\n                                    \"timeRange\": { \"start\": \"08:00\", \"end\": \"21:00\" }\n                                }\n                            ]\n                        },\n                        \"paymentConstraints\": { \"codAvailable\": true }\n                    },\n                    \"considerations\": [\n                        {\n                            \"id\": \"CONSIDERATION-COFFEE-BUNDLE-005\",\n                            \"status\": { \"name\": \"ACTIVE\" },\n                            \"considerationAttributes\": {\n                                \"@context\": \"https://schema.beckn.io/RetailConsideration/v2.1/context.jsonld\",\n                                \"@type\": \"RetailConsideration\",\n                                \"currency\": \"INR\",\n                                \"breakup\": [\n                                    { \"title\": \"Bru Gold Instant Coffee 200g\", \"amount\": 375, \"type\": \"BASE_PRICE\" },\n                                    { \"title\": \"Nescafe Classic Instant Coffee 100g\", \"amount\": 285, \"type\": \"BASE_PRICE\" },\n                                    { \"title\": \"Coffee Bundle Discount (15%)\", \"amount\": -99.0, \"type\": \"DISCOUNT\" }\n                                ],\n                                \"totalAmount\": 561.0,\n                                \"paymentMethods\": [\"PREPAID\", \"COD\", \"UPI\"]\n                            }\n                        }\n                    ]\n                }\n            ],\n            \"publishDirectives\": {\n                \"catalogType\": \"regular\"\n            }\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 ACK — Catalog published",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/v1/catalog/publish" }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"status\": \"ACK\",\n    \"message\": \"Catalog published successfully\"\n  },\n  \"messages\": null\n}"
+            },
+            {
+              "name": "400 — Invalid request body",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/v1/catalog/publish" },
+                "body": { "mode": "raw", "raw": "{}" }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": \"error\",\n  \"data\": null,\n  \"messages\": [\n    {\n      \"msgid\": 1001,\n      \"errcode\": \"missing\",\n      \"field\": \"\",\n      \"vals\": null\n    }\n  ]\n}"
+            },
+            {
+              "name": "500 — DB or CDS failure",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/v1/catalog/publish" }
+              },
+              "status": "Internal Server Error",
+              "code": 500,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"status\": \"error\",\n  \"data\": null,\n  \"messages\": [\n    {\n      \"msgid\": 1002,\n      \"errcode\": \"database_error\",\n      \"field\": \"\",\n      \"vals\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Publish Catalog (minimal — single product)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is ACK', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('success');",
+                  "    pm.expect(body.data.status).to.eql('ACK');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/catalog/publish",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "catalog", "publish"]
+            },
+            "description": "Minimal valid request — one catalog, one resource, one offer, no bundle.\n\nUseful for quick smoke-testing the endpoint without a large payload.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"catalogs\": [\n        {\n            \"id\": \"CAT-SMOKE-TEST-001\",\n            \"descriptor\": {\n                \"name\": \"Smoke Test Catalog\",\n                \"shortDesc\": \"Minimal catalog for testing\"\n            },\n            \"provider\": {\n                \"id\": \"PROV-SMOKE-001\",\n                \"descriptor\": { \"name\": \"Test Provider\" },\n                \"availableAt\": [\n                    {\n                        \"geo\": { \"type\": \"Point\", \"coordinates\": [77.5946, 12.9716] },\n                        \"address\": {\n                            \"streetAddress\": \"1 MG Road\",\n                            \"addressLocality\": \"Bengaluru\",\n                            \"addressRegion\": \"Karnataka\",\n                            \"postalCode\": \"560001\",\n                            \"addressCountry\": \"IN\"\n                        }\n                    }\n                ]\n            },\n            \"resources\": [\n                {\n                    \"id\": \"RES-SMOKE-PRODUCT-001\",\n                    \"descriptor\": {\n                        \"name\": \"Test Product\",\n                        \"shortDesc\": \"A test product for smoke testing\"\n                    },\n                    \"resourceAttributes\": {\n                        \"@context\": \"https://schema.beckn.io/GroceryResource/v2.1/context.jsonld\",\n                        \"@type\": \"GroceryResourceAttributes\",\n                        \"identity\": { \"brand\": \"TestBrand\", \"originCountry\": \"IN\" }\n                    }\n                }\n            ],\n            \"offers\": [\n                {\n                    \"id\": \"OFFER-SMOKE-001\",\n                    \"descriptor\": {\n                        \"name\": \"Test Offer\",\n                        \"shortDesc\": \"Smoke test offer at ₹100\"\n                    },\n                    \"resourceIds\": [\"RES-SMOKE-PRODUCT-001\"],\n                    \"provider\": {\n                        \"id\": \"PROV-SMOKE-001\",\n                        \"descriptor\": { \"name\": \"Test Provider\" },\n                        \"availableAt\": [\n                            {\n                                \"geo\": { \"type\": \"Point\", \"coordinates\": [77.5946, 12.9716] },\n                                \"address\": {\n                                    \"streetAddress\": \"1 MG Road\",\n                                    \"addressLocality\": \"Bengaluru\",\n                                    \"addressRegion\": \"Karnataka\",\n                                    \"postalCode\": \"560001\",\n                                    \"addressCountry\": \"IN\"\n                                }\n                            }\n                        ]\n                    },\n                    \"validity\": {\n                        \"startDate\": \"2026-04-01T00:00:00Z\",\n                        \"endDate\": \"2026-12-31T23:59:59Z\"\n                    },\n                    \"considerations\": [\n                        {\n                            \"id\": \"CONSID-SMOKE-001\",\n                            \"status\": { \"name\": \"ACTIVE\" },\n                            \"considerationAttributes\": {\n                                \"@context\": \"https://schema.beckn.io/RetailConsideration/v2.1/context.jsonld\",\n                                \"@type\": \"RetailConsideration\",\n                                \"currency\": \"INR\",\n                                \"breakup\": [\n                                    { \"title\": \"Test Product (MRP)\", \"amount\": 100, \"type\": \"BASE_PRICE\" }\n                                ],\n                                \"totalAmount\": 100\n                            }\n                        }\n                    ]\n                }\n            ],\n            \"publishDirectives\": { \"catalogType\": \"regular\" }\n        }\n    ]\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Catalog (missing catalogs — expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Response is error', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/catalog/publish",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "catalog", "publish"]
+            },
+            "description": "Sends an empty body to verify input validation returns HTTP 400.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Beckn — Select (BAP → BPP)",
+      "description": "Beckn `select` action inbound from a BAP.\n\n**Endpoint:** `POST /beckn/select`\n\nThe BPP immediately returns `{\"message\":{\"ack\":{\"status\":\"ACK\"}}}` and then asynchronously:\n1. Looks up each offer/resource in the DB inventory.\n2. Enriches the contract with full product details and a calculated price breakdown.\n3. POSTs the `on_select` callback to `{context.bapUri}/on_select`.\n4. Writes INBOUND and OUTBOUND rows to `beckn_message_log`.\n\n**Offer / resource IDs must match** what was previously published via `POST /v1/catalog/publish`.  \nThe IDs below match the full-example publish request — run that first.",
+      "item": [
+        {
+          "name": "Select — offer found (Bru Gold Coffee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Synchronous ACK returned', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.nested.property('message.ack.status', 'ACK');",
+                  "});",
+                  "// The on_select callback is fired asynchronously to context.bapUri.",
+                  "// Check the beckn_message_log table for INBOUND + OUTBOUND rows."
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/beckn/select",
+              "host": ["{{base_url}}"],
+              "path": ["beckn", "select"]
+            },
+            "description": "BAP selects 2 units of Bru Gold Coffee (offer already published to inventory).\n\n**Expected behaviour:**\n- HTTP 200 ACK returned immediately.\n- BPP asynchronously enriches the contract with `resourceAttributes`, `offerAttributes`, and a price breakdown (`2 × ₹375 = ₹750`) then POSTs `on_select` to the `bapUri` in the context.\n- Two rows written to `beckn_message_log` (INBOUND select + OUTBOUND on_select).",
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n    \"context\": {\n        \"version\": \"2.0.0\",\n        \"action\": \"select\",\n        \"timestamp\": \"2026-04-09T18:01:01.442Z\",\n        \"messageId\": \"64a9963f-6054-4c32-9112-08d5ecd4dabf\",\n        \"transactionId\": \"8100d125-76a7-4588-88be-81b97657cd09\",\n        \"bapId\": \"sandbox.food-finder.com\",\n        \"bapUri\": \"http://onix-bap:8081/bap/receiver\",\n        \"bppId\": \"bpptest1.remiges.tech\",\n        \"bppUri\": \"http://bpptest1.remiges.tech/bpp/receiver\",\n        \"ttl\": \"PT30S\",\n        \"networkId\": \"beckn.one/ion-retail\"\n    },\n    \"message\": {\n        \"contract\": {\n            \"status\": { \"code\": \"DRAFT\" },\n            \"participants\": [\n                {\n                    \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\",\n                    \"descriptor\": { \"name\": \"FreshMart Koramangala\" },\n                    \"participantAttributes\": {\n                        \"@context\": \"https://raw.githubusercontent.com/beckn/schemas/main/schema/Provider/v2.1/context.jsonld\",\n                        \"@type\": \"Provider\",\n                        \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\",\n                        \"descriptor\": { \"name\": \"FreshMart Koramangala\" }\n                    }\n                },\n                {\n                    \"id\": \"buyer-motiur-rehman\",\n                    \"descriptor\": { \"name\": \"Motiur Rehman\" },\n                    \"participantAttributes\": {\n                        \"@context\": \"https://raw.githubusercontent.com/beckn/schemas/main/schema/Consumer/v2.0/context.jsonld\",\n                        \"@type\": \"Consumer\",\n                        \"role\": \"buyer\",\n                        \"person\": {\n                            \"id\": \"buyer-001\",\n                            \"name\": \"Motiur Rehman\",\n                            \"email\": \"motiur@example.com\",\n                            \"telephone\": \"+919191223433\"\n                        }\n                    }\n                }\n            ],\n            \"commitments\": [\n                {\n                    \"id\": \"commitment-bru-001\",\n                    \"status\": { \"descriptor\": { \"code\": \"DRAFT\" } },\n                    \"resources\": [\n                        { \"id\": \"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\" }\n                    ],\n                    \"offer\": {\n                        \"id\": \"OFFER-BRU-GOLD-200G-005\",\n                        \"resourceIds\": [\"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\"],\n                        \"descriptor\": { \"name\": \"Bru Gold Instant Coffee 200g\" },\n                        \"provider\": {\n                            \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\",\n                            \"descriptor\": { \"name\": \"FreshMart Koramangala\" }\n                        }\n                    },\n                    \"commitmentAttributes\": {\n                        \"@context\": \"https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailCommitment/v2.1/context.jsonld\",\n                        \"@type\": \"RetailCommitment\",\n                        \"lineId\": \"LINE-001\",\n                        \"resourceId\": \"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\",\n                        \"quantity\": { \"unitCode\": \"EA\", \"unitQuantity\": 2 }\n                    }\n                }\n            ],\n            \"performance\": [\n                {\n                    \"id\": \"perf-001\",\n                    \"status\": { \"code\": \"PENDING\" },\n                    \"commitmentIds\": [\"commitment-bru-001\"],\n                    \"performanceAttributes\": {\n                        \"@context\": \"https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailPerformance/v2.1/context.jsonld\",\n                        \"@type\": \"rcpa:RetailPerformance\",\n                        \"supportedPerformanceModes\": [\"DELIVERY\"],\n                        \"deliveryDetails\": {\n                            \"address\": {\n                                \"streetAddress\": \"123, MG Road\",\n                                \"addressLocality\": \"Bengaluru\",\n                                \"addressRegion\": \"Karnataka\",\n                                \"postalCode\": \"560001\",\n                                \"addressCountry\": \"IND\"\n                            },\n                            \"contact\": { \"name\": \"Motiur Rehman\", \"phone\": \"+919191223433\" }\n                        }\n                    }\n                }\n            ]\n        }\n    }\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 ACK — select received",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/beckn/select" }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"context\": {\n    \"version\": \"2.0.0\",\n    \"action\": \"select\",\n    \"timestamp\": \"2026-04-09T18:01:01.442Z\",\n    \"messageId\": \"64a9963f-6054-4c32-9112-08d5ecd4dabf\",\n    \"transactionId\": \"8100d125-76a7-4588-88be-81b97657cd09\",\n    \"bapId\": \"sandbox.food-finder.com\",\n    \"bapUri\": \"http://onix-bap:8081/bap/receiver\",\n    \"bppId\": \"bpptest1.remiges.tech\",\n    \"bppUri\": \"http://bpptest1.remiges.tech/bpp/receiver\",\n    \"ttl\": \"PT30S\",\n    \"networkId\": \"beckn.one/ion-retail\"\n  },\n  \"message\": {\n    \"ack\": { \"status\": \"ACK\" }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Select — multiple offers (Bru + Nescafe bundle)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Synchronous ACK returned', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.nested.property('message.ack.status', 'ACK');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/beckn/select",
+              "host": ["{{base_url}}"],
+              "path": ["beckn", "select"]
+            },
+            "description": "BAP selects two separate commitments in a single contract:\n- 2 × Bru Gold Coffee @ ₹375 each\n- 1 × Nescafe Classic 100g @ ₹285\n\nExpected `on_select` consideration total: **₹1,035** (₹750 + ₹285).",
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n    \"context\": {\n        \"version\": \"2.0.0\",\n        \"action\": \"select\",\n        \"timestamp\": \"2026-04-09T18:05:00.000Z\",\n        \"messageId\": \"a1b2c3d4-0001-0002-0003-000000000001\",\n        \"transactionId\": \"txn-multi-offer-001\",\n        \"bapId\": \"sandbox.food-finder.com\",\n        \"bapUri\": \"http://onix-bap:8081/bap/receiver\",\n        \"bppId\": \"bpptest1.remiges.tech\",\n        \"bppUri\": \"http://bpptest1.remiges.tech/bpp/receiver\",\n        \"ttl\": \"PT30S\",\n        \"networkId\": \"beckn.one/ion-retail\"\n    },\n    \"message\": {\n        \"contract\": {\n            \"status\": { \"code\": \"DRAFT\" },\n            \"participants\": [\n                {\n                    \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\",\n                    \"descriptor\": { \"name\": \"FreshMart Koramangala\" }\n                },\n                {\n                    \"id\": \"buyer-riya-sharma\",\n                    \"descriptor\": { \"name\": \"Riya Sharma\" }\n                }\n            ],\n            \"commitments\": [\n                {\n                    \"id\": \"commitment-bru-002\",\n                    \"status\": { \"descriptor\": { \"code\": \"DRAFT\" } },\n                    \"resources\": [\n                        { \"id\": \"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\" }\n                    ],\n                    \"offer\": {\n                        \"id\": \"OFFER-BRU-GOLD-200G-005\",\n                        \"resourceIds\": [\"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\"],\n                        \"descriptor\": { \"name\": \"Bru Gold Instant Coffee 200g\" },\n                        \"provider\": { \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\" }\n                    },\n                    \"commitmentAttributes\": {\n                        \"@type\": \"RetailCommitment\",\n                        \"lineId\": \"LINE-001\",\n                        \"resourceId\": \"RES-GROCERY-BRU-GOLD-INSTANT-COFFEE-123GRAM\",\n                        \"quantity\": { \"unitCode\": \"EA\", \"unitQuantity\": 2 }\n                    }\n                },\n                {\n                    \"id\": \"commitment-nescafe-001\",\n                    \"status\": { \"descriptor\": { \"code\": \"DRAFT\" } },\n                    \"resources\": [\n                        { \"id\": \"RES-GROCERY-NESCAFE-CLASSIC-INSTANT-COFFEE-100GRAMS\" }\n                    ],\n                    \"offer\": {\n                        \"id\": \"OFFER-NESCAFE-CLASSIC-100G-005\",\n                        \"resourceIds\": [\"RES-GROCERY-NESCAFE-CLASSIC-INSTANT-COFFEE-100GRAMS\"],\n                        \"descriptor\": { \"name\": \"Nescafe Classic 100g\" },\n                        \"provider\": { \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\" }\n                    },\n                    \"commitmentAttributes\": {\n                        \"@type\": \"RetailCommitment\",\n                        \"lineId\": \"LINE-002\",\n                        \"resourceId\": \"RES-GROCERY-NESCAFE-CLASSIC-INSTANT-COFFEE-100GRAMS\",\n                        \"quantity\": { \"unitCode\": \"EA\", \"unitQuantity\": 1 }\n                    }\n                }\n            ]\n        }\n    }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Select — offer NOT in inventory (expect UNAVAILABLE in on_select)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ACK still returned (async processing)', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.nested.property('message.ack.status', 'ACK');",
+                  "});",
+                  "// The BPP will fire on_select to the bapUri with commitment status UNAVAILABLE.",
+                  "// No consideration is included in the on_select for missing offers."
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/beckn/select",
+              "host": ["{{base_url}}"],
+              "path": ["beckn", "select"]
+            },
+            "description": "Requests an offer ID that does not exist in the BPP's inventory.\n\n**Expected behaviour:**\n- HTTP 200 ACK is still returned (the request itself is valid).\n- BPP sends `on_select` to the BAP with commitment `status.descriptor.code = \"UNAVAILABLE\"` and no `consideration` block.\n- INBOUND and OUTBOUND log rows are still written to `beckn_message_log`.",
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n    \"context\": {\n        \"version\": \"2.0.0\",\n        \"action\": \"select\",\n        \"timestamp\": \"2026-04-09T18:10:00.000Z\",\n        \"messageId\": \"deadbeef-0000-0000-0000-000000000001\",\n        \"transactionId\": \"txn-not-found-001\",\n        \"bapId\": \"sandbox.food-finder.com\",\n        \"bapUri\": \"http://onix-bap:8081/bap/receiver\",\n        \"bppId\": \"bpptest1.remiges.tech\",\n        \"bppUri\": \"http://bpptest1.remiges.tech/bpp/receiver\",\n        \"ttl\": \"PT30S\",\n        \"networkId\": \"beckn.one/ion-retail\"\n    },\n    \"message\": {\n        \"contract\": {\n            \"status\": { \"code\": \"DRAFT\" },\n            \"commitments\": [\n                {\n                    \"id\": \"commitment-ghost-001\",\n                    \"resources\": [\n                        { \"id\": \"item-does-not-exist-xyz\" }\n                    ],\n                    \"offer\": {\n                        \"id\": \"offer-does-not-exist-xyz\",\n                        \"resourceIds\": [\"item-does-not-exist-xyz\"],\n                        \"descriptor\": { \"name\": \"Ghost Product\" },\n                        \"provider\": { \"id\": \"PROV-FRESHMART-KORAMANGALA-ION-05\" }\n                    },\n                    \"commitmentAttributes\": {\n                        \"@type\": \"RetailCommitment\",\n                        \"lineId\": \"LINE-001\",\n                        \"resourceId\": \"item-does-not-exist-xyz\",\n                        \"quantity\": { \"unitCode\": \"EA\", \"unitQuantity\": 1 }\n                    }\n                }\n            ]\n        }\n    }\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 ACK — but on_select will carry UNAVAILABLE status",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/beckn/select" }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"context\": {\n    \"version\": \"2.0.0\",\n    \"action\": \"select\",\n    \"messageId\": \"deadbeef-0000-0000-0000-000000000001\",\n    \"transactionId\": \"txn-not-found-001\",\n    \"bapId\": \"sandbox.food-finder.com\",\n    \"bapUri\": \"http://onix-bap:8081/bap/receiver\",\n    \"bppId\": \"bpptest1.remiges.tech\",\n    \"bppUri\": \"http://bpptest1.remiges.tech/bpp/receiver\",\n    \"networkId\": \"beckn.one/ion-retail\"\n  },\n  \"message\": {\n    \"ack\": { \"status\": \"ACK\" }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Select — missing bapUri (expect 400 NACK)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('NACK returned', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.nested.property('message.ack.status', 'NACK');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/beckn/select",
+              "host": ["{{base_url}}"],
+              "path": ["beckn", "select"]
+            },
+            "description": "Omits `bapUri` from the context, which is required to fire the `on_select` callback.\n\nThe BPP must return HTTP 400 with `message.ack.status = \"NACK\"`.",
+            "body": {
+              "mode": "raw",
+              "options": { "raw": { "language": "json" } },
+              "raw": "{\n    \"context\": {\n        \"version\": \"2.0.0\",\n        \"action\": \"select\",\n        \"timestamp\": \"2026-04-09T18:15:00.000Z\",\n        \"messageId\": \"aaaaaaaa-0000-0000-0000-000000000001\",\n        \"transactionId\": \"txn-nack-001\",\n        \"bapId\": \"sandbox.food-finder.com\",\n        \"bapUri\": \"\",\n        \"bppId\": \"bpptest1.remiges.tech\",\n        \"bppUri\": \"http://bpptest1.remiges.tech/bpp/receiver\",\n        \"networkId\": \"beckn.one/ion-retail\"\n    },\n    \"message\": {\n        \"contract\": {\n            \"commitments\": [\n                {\n                    \"id\": \"c-001\",\n                    \"resources\": [{ \"id\": \"OFFER-BRU-GOLD-200G-005\" }],\n                    \"offer\": { \"id\": \"OFFER-BRU-GOLD-200G-005\" }\n                }\n            ]\n        }\n    }\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
