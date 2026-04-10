@@ -11,6 +11,7 @@ import (
 	"github.com/ion/winroom/bpp/internal/catalog"
 	"github.com/ion/winroom/bpp/internal/config"
 	"github.com/ion/winroom/bpp/internal/confirmsvc"
+	"github.com/ion/winroom/bpp/internal/dashboardsvc"
 	"github.com/ion/winroom/bpp/internal/initsvc"
 	"github.com/ion/winroom/bpp/internal/selectsvc"
 )
@@ -49,6 +50,7 @@ func RegisterRoutes(svc *service.Service, cfg *config.Config) {
 	// Provider-facing catalog publish API (simplified — no Beckn context required from provider)
 	v1 := svc.Router.Group("/api/v1")
 	registerProviderCatalogRoutes(svc, v1, pool, cfg)
+	registerDashboardRoutes(v1, pool, cfg)
 
 	webhook := svc.Router.Group("/api/webhook")
 	registerTransactionRoutes(svc, webhook, pool, cfg)
@@ -149,6 +151,25 @@ func registerProviderCatalogRoutes(svc *service.Service, g *gin.RouterGroup, poo
 // The CDS calls /beckn/catalog/on_publish to notify the BPP that a previously
 // submitted catalog has been indexed (or rejected).
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Dashboard API  (GET /api/v1/dashboard/*, /api/v1/orders/*, etc.)
+// ---------------------------------------------------------------------------
+
+func registerDashboardRoutes(v1 *gin.RouterGroup, pool *pgxpool.Pool, cfg *config.Config) {
+	h := dashboardsvc.NewHandler(pool, cfg)
+
+	v1.GET("/dashboard/stats", h.HandleStats)
+
+	v1.GET("/orders", h.HandleListOrders)
+	v1.GET("/orders/:id", h.HandleGetOrder)
+
+	inv := v1.Group("/inventory")
+	inv.GET("/resources", h.HandleListResources)
+	inv.GET("/offers", h.HandleListOffers)
+
+	v1.GET("/messages", h.HandleListMessages)
+}
 
 func registerBecknCatalogRoutes(svc *service.Service, g *gin.RouterGroup) {
 	cat := g.Group("/catalog")

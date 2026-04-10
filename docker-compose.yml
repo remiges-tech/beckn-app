@@ -113,6 +113,19 @@ services:
     networks:
       - beckn
 
+  # ─── BPP Frontend (Admin Dashboard) ─────────────────────────────────────
+  bpp-frontend:
+    build:
+      context: ./bpp-frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - bpp
+    ports:
+      - "3001:80"
+    networks:
+      - beckn
+
 volumes:
   postgres_data:
 
