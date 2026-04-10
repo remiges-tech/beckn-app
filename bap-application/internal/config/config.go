@@ -27,12 +27,12 @@ type Config struct {
 
 	// BPP identity — used inside the Beckn context fields (bppId / bppUri).
 	BppID  string // BPP subscriber ID  (context.bppId)
-	BppURI string // BPP receiver URL   (context.bppUri, e.g. http://bpptest.remiges.tech/bpp/receiver)
+	BppURI string // BPP receiver URL   (context.bppUri, e.g. https://bpptest.remiges.tech/bpp/receiver)
 
-	// AdapterURL is the ONIX BAP adapter base URL the BAP actually POSTs to.
-	// The action is appended: <AdapterURL>/select, <AdapterURL>/init, etc.
-	// This is intentionally different from BppURI.
-	AdapterURL string
+	// BapCallerURL is the ONIX BAP caller base URL the BAP actually POSTs to.
+	// The action is appended: <BapCallerURL>/select, <BapCallerURL>/init, etc.
+	// This is intentionally different from BppURI, which stays in the Beckn context.
+	BapCallerURL string
 
 	// CDSDiscoverURL is the full URL of the Catalog Discovery Service discover endpoint.
 	// Example: https://cds.example.com/discover
@@ -59,9 +59,9 @@ func Load() (*Config, error) {
 		BapURI:    os.Getenv("BAP_URI"),
 		NetworkID: os.Getenv("NETWORK_ID"),
 
-		BppID:      os.Getenv("BPP_ID"),
-		BppURI:     os.Getenv("BPP_URI"),
-		AdapterURL: os.Getenv("ADAPTER_URL"),
+		BppID:        os.Getenv("BPP_ID"),
+		BppURI:       os.Getenv("BPP_URI"),
+		BapCallerURL: getEnv("BAP_CALLER_URL", os.Getenv("ADAPTER_URL")),
 
 		CDSDiscoverURL: os.Getenv("CDS_DISCOVER_URL"),
 	}
@@ -114,8 +114,8 @@ func (c *Config) validate() error {
 	if c.BppURI == "" {
 		return fmt.Errorf("BPP_URI is required")
 	}
-	if c.AdapterURL == "" {
-		return fmt.Errorf("ADAPTER_URL is required")
+	if c.BapCallerURL == "" {
+		return fmt.Errorf("BAP_CALLER_URL is required")
 	}
 	return nil
 }

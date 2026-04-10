@@ -169,7 +169,7 @@ func (s *ClientService) Select(ctx context.Context, req *ClientSelectRequest) (s
 		Message: json.RawMessage(msgJSON),
 	}
 
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "select", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "select", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return "", err
 	}
 
@@ -408,7 +408,7 @@ func (s *ClientService) Init(ctx context.Context, req *ClientInitRequest) error 
 		Message: json.RawMessage(msgJSON),
 	}
 
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "init", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "init", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 
@@ -555,7 +555,7 @@ func (s *ClientService) Confirm(ctx context.Context, req *ClientConfirmRequest) 
 		Message: json.RawMessage(msgJSON),
 	}
 
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "confirm", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "confirm", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 
@@ -877,8 +877,8 @@ func (s *ClientService) newContext(action, txnID, msgID, bppID, bppURI string) B
 
 // sendToBPP transmits a Beckn request to the ONIX adapter and logs both the
 // outbound request and the adapter ACK response to beckn_message_log and logharbour.
-func (s *ClientService) sendToBPP(ctx context.Context, bppURI, action string, txnID, msgID uuid.UUID, networkID string, req BecknRequest) error {
-	targetURL := fmt.Sprintf("%s/%s", bppURI, action)
+func (s *ClientService) sendToBPP(ctx context.Context, callerURL, action string, txnID, msgID uuid.UUID, networkID string, req BecknRequest) error {
+	targetURL := fmt.Sprintf("%s/%s", callerURL, action)
 	reqJSON, _ := json.Marshal(req)
 
 	start := time.Now()
@@ -909,8 +909,8 @@ func (s *ClientService) sendToBPP(ctx context.Context, bppURI, action string, tx
 			Url:                  strPtr(targetURL),
 			BapID:                strPtr(s.cfg.BapID),
 			BapUri:               strPtr(s.cfg.BapURI),
-			BppID:                &bppURI,
-			BppUri:               &bppURI,
+			BppID:                strPtr(req.Context.BppID),
+			BppUri:               strPtr(req.Context.BppURI),
 			NetworkID:            &networkID,
 			AckStatus:            ack,
 			RequestPayload:       reqJSON,

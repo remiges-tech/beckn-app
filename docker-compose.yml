@@ -89,7 +89,7 @@ services:
 
       # BPP identity placed in context.bppId / context.bppUri.
       BPP_ID: bpptest1.remiges.tech
-      BPP_URI: http://bpptest.remiges.tech/bpp/receiver
+      BPP_URI: https://bpptest.remiges.tech/bpp/receiver
 
       # ADAPTER_URL is the ONIX BAP adapter the BAP actually POSTs to.
       ADAPTER_URL: https://baptest.remiges.tech/bap/caller
