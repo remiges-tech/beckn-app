@@ -52,7 +52,7 @@ services:
       BPP_URI: https://bpptest.remiges.tech/bpp/receiver
       NETWORK_ID: ion.id/ion-winroom-0426
 
-      CDS_PUBLISH_URL: "" # BPP → CDS catalog publish endpoint
+      CDS_PUBLISH_URL: "https://fabric.nfh.global/beckn/catalog/publish" # BPP → CDS catalog publish endpoint
       BPP_SIGNING_PRIVATE_KEY: "" # base64 Ed25519 seed (required for signed outbound calls)
       BPP_SIGNING_KEY_ID: "key-001"
     ports:

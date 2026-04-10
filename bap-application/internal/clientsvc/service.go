@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -139,9 +140,24 @@ func (s *ClientService) Discover(ctx context.Context, req *ClientDiscoverRequest
 
 // Select initiates a Select action to the ONIX BAP adapter.
 // Builds a Beckn v2 message.contract from the frontend's SelectItem list.
+// BPP identity is taken from the first item's BppID/BppURI (populated from the
+// catalog discover response) so the request is routed to the BPP that owns the
+// resource. Server config values are used only as a fallback.
 func (s *ClientService) Select(ctx context.Context, req *ClientSelectRequest) (string, error) {
 	txnID := uuid.New()
 	msgID := uuid.New()
+
+	// Resolve BPP identity from the catalog-supplied values; fall back to config.
+	bppID := s.cfg.BppID
+	bppURI := s.cfg.BppURI
+	if len(req.Items) > 0 {
+		if req.Items[0].BppID != "" {
+			bppID = req.Items[0].BppID
+		}
+		if req.Items[0].BppURI != "" {
+			bppURI = req.Items[0].BppURI
+		}
+	}
 
 	msgJSON, err := buildSelectMessage(req.Items, s.cfg.BapID)
 	if err != nil {
@@ -149,7 +165,7 @@ func (s *ClientService) Select(ctx context.Context, req *ClientSelectRequest) (s
 	}
 
 	becknReq := BecknRequest{
-		Context: s.newContext("select", txnID.String(), msgID.String(), s.cfg.BppID, s.cfg.BppURI),
+		Context: s.newContext("select", txnID.String(), msgID.String(), bppID, bppURI),
 		Message: json.RawMessage(msgJSON),
 	}
 
@@ -162,8 +178,8 @@ func (s *ClientService) Select(ctx context.Context, req *ClientSelectRequest) (s
 		TransactionID: txnID,
 		BapID:         s.cfg.BapID,
 		NetworkID:     &s.cfg.NetworkID,
-		BppID:         &s.cfg.BppID,
-		BppUri:        &s.cfg.BppURI,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
 		Status:        dbsqlc.TransactionStatusSELECTSENT,
 	}); err != nil {
 		s.lh.WithModule("client_svc").Warn().Error(err).Log("upsert transaction failed")
@@ -346,52 +362,209 @@ func sanitizeOfferAttributes(raw json.RawMessage) map[string]interface{} {
 	return out
 }
 
+// billingInfo holds the buyer billing details submitted by the frontend.
+// Address fields follow Schema.org naming to map directly into the Beckn
+// performanceAttributes.deliveryDetails.address structure.
+type billingInfo struct {
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	Phone           string `json:"phone"`
+	StreetAddress   string `json:"streetAddress"`
+	AddressLocality string `json:"addressLocality"`
+	AddressRegion   string `json:"addressRegion"`
+	PostalCode      string `json:"postalCode"`
+	AddressCountry  string `json:"addressCountry"`
+}
+
 // Init initiates an Init action to the ONIX BAP adapter.
+// It loads the on_select contract snapshot, patches it with the buyer's real
+// billing and delivery details, then sends the full contract as message.contract.
 func (s *ClientService) Init(ctx context.Context, req *ClientInitRequest) error {
 	txnID, _ := uuid.Parse(req.TransactionID)
 	msgID := uuid.New()
+	q := dbsqlc.New(s.pool)
+
+	// Resolve BPP identity from the stored transaction (set during select).
+	txn, err := q.GetTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("transaction %s not found: %w", req.TransactionID, err)
+	}
+	bppID := s.cfg.BppID
+	bppURI := s.cfg.BppURI
+	if txn.BppID != nil && *txn.BppID != "" {
+		bppID = *txn.BppID
+	}
+	if txn.BppUri != nil && *txn.BppUri != "" {
+		bppURI = *txn.BppUri
+	}
+
+	msgJSON, err := s.buildInitMessage(ctx, q, txnID, req)
+	if err != nil {
+		return fmt.Errorf("build init message: %w", err)
+	}
 
 	becknReq := BecknRequest{
-		Context: s.newContext("init", req.TransactionID, msgID.String(), s.cfg.BppID, s.cfg.BppURI),
-		Message: json.RawMessage(fmt.Sprintf(`{"order":{"billing":%s,"fulfillments":%s}}`, string(req.Billing), string(req.Fulfillments))),
+		Context: s.newContext("init", req.TransactionID, msgID.String(), bppID, bppURI),
+		Message: json.RawMessage(msgJSON),
 	}
 
 	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "init", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 
-	q := dbsqlc.New(s.pool)
 	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
 		TransactionID: txnID,
 		BapID:         s.cfg.BapID,
 		NetworkID:     &s.cfg.NetworkID,
-		BppID:         &s.cfg.BppID,
-		BppUri:        &s.cfg.BppURI,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
 		Status:        dbsqlc.TransactionStatusINITSENT,
 	})
 }
 
+// buildInitMessage loads the on_select contract snapshot and patches it with real
+// buyer billing/delivery details, returning a {"contract": ...} JSON blob.
+func (s *ClientService) buildInitMessage(ctx context.Context, q *dbsqlc.Queries, txnID uuid.UUID, req *ClientInitRequest) ([]byte, error) {
+	var billing billingInfo
+	if err := json.Unmarshal(req.Billing, &billing); err != nil {
+		return nil, fmt.Errorf("parse billing: %w", err)
+	}
+
+	snapshot, err := q.GetLatestContractSnapshot(ctx, txnID)
+	if err != nil || len(snapshot.Contract) == 0 || string(snapshot.Contract) == "null" {
+		return nil, fmt.Errorf("no on_select contract snapshot found for txn %s", txnID)
+	}
+
+	// Parse as a generic map so we update only the fields we care about while
+	// preserving the full BPP-enriched contract (commitments, resources, etc.).
+	var contract map[string]interface{}
+	if err := json.Unmarshal(snapshot.Contract, &contract); err != nil {
+		return nil, fmt.Errorf("parse contract snapshot: %w", err)
+	}
+
+	patchBuyerParticipant(contract, s.cfg.BapID, billing)
+	patchPerformanceDelivery(contract, billing)
+
+	return json.Marshal(map[string]interface{}{"contract": contract})
+}
+
+// patchBuyerParticipant updates the buyer participant's person details with
+// the actual billing name and phone number.
+func patchBuyerParticipant(contract map[string]interface{}, bapID string, b billingInfo) {
+	participants, _ := contract["participants"].([]interface{})
+	buyerID := "buyer-" + bapID
+	for _, raw := range participants {
+		p, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if id, _ := p["id"].(string); id != buyerID {
+			continue
+		}
+		attrs, ok := p["participantAttributes"].(map[string]interface{})
+		if !ok {
+			attrs = map[string]interface{}{}
+			p["participantAttributes"] = attrs
+		}
+		person, _ := attrs["person"].(map[string]interface{})
+		if person == nil {
+			person = map[string]interface{}{}
+		}
+		if b.Name != "" {
+			person["name"] = b.Name
+		}
+		if b.Email != "" {
+			person["email"] = b.Email
+		}
+		if b.Phone != "" {
+			person["telephone"] = b.Phone
+		}
+		attrs["person"] = person
+	}
+}
+
+// patchPerformanceDelivery replaces the placeholder delivery address and contact
+// in every performance block with real values from the buyer's billing form.
+func patchPerformanceDelivery(contract map[string]interface{}, b billingInfo) {
+	performances, _ := contract["performance"].([]interface{})
+	for _, raw := range performances {
+		p, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		attrs, ok := p["performanceAttributes"].(map[string]interface{})
+		if !ok {
+			attrs = map[string]interface{}{}
+			p["performanceAttributes"] = attrs
+		}
+		country := b.AddressCountry
+		if country == "" {
+			country = "IN"
+		}
+		attrs["deliveryDetails"] = map[string]interface{}{
+			"address": map[string]interface{}{
+				"streetAddress":   b.StreetAddress,
+				"addressLocality": b.AddressLocality,
+				"addressRegion":   b.AddressRegion,
+				"postalCode":      b.PostalCode,
+				"addressCountry":  country,
+			},
+			"contact": map[string]interface{}{
+				"name":  b.Name,
+				"phone": b.Phone,
+			},
+		}
+	}
+}
+
 // Confirm initiates a Confirm action to the ONIX BAP adapter.
+// It loads the latest contract snapshot (from on_init) and sends the full
+// contract as message.contract, satisfying the schema's required commitments field.
 func (s *ClientService) Confirm(ctx context.Context, req *ClientConfirmRequest) error {
 	txnID, _ := uuid.Parse(req.TransactionID)
 	msgID := uuid.New()
+	q := dbsqlc.New(s.pool)
+
+	// Resolve BPP identity from the stored transaction.
+	txn, err := q.GetTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("transaction %s not found: %w", req.TransactionID, err)
+	}
+	bppID := s.cfg.BppID
+	bppURI := s.cfg.BppURI
+	if txn.BppID != nil && *txn.BppID != "" {
+		bppID = *txn.BppID
+	}
+	if txn.BppUri != nil && *txn.BppUri != "" {
+		bppURI = *txn.BppUri
+	}
+
+	// Load the on_init contract snapshot (most recent, contains BPP-assigned contract id).
+	snapshot, err := q.GetLatestContractSnapshot(ctx, txnID)
+	if err != nil || len(snapshot.Contract) == 0 || string(snapshot.Contract) == "null" {
+		return fmt.Errorf("no contract snapshot found for confirm txn %s", txnID)
+	}
+
+	msgJSON, err := json.Marshal(map[string]interface{}{"contract": json.RawMessage(snapshot.Contract)})
+	if err != nil {
+		return fmt.Errorf("marshal confirm message: %w", err)
+	}
 
 	becknReq := BecknRequest{
-		Context: s.newContext("confirm", req.TransactionID, msgID.String(), s.cfg.BppID, s.cfg.BppURI),
-		Message: json.RawMessage(`{"order":{}}`),
+		Context: s.newContext("confirm", req.TransactionID, msgID.String(), bppID, bppURI),
+		Message: json.RawMessage(msgJSON),
 	}
 
 	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "confirm", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 
-	q := dbsqlc.New(s.pool)
 	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
 		TransactionID: txnID,
 		BapID:         s.cfg.BapID,
 		NetworkID:     &s.cfg.NetworkID,
-		BppID:         &s.cfg.BppID,
-		BppUri:        &s.cfg.BppURI,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
 		Status:        dbsqlc.TransactionStatusCONFIRMSENT,
 	})
 }
@@ -559,49 +732,51 @@ type becknErrActivity struct {
 	Error  string `json:"error"`
 }
 
-// logBecknOut emits a logharbour Activity entry before an outbound Beckn call.
-// The human-readable banner appears in "msg"; full request JSON is in data.activity_data.
+// logBecknOut prints the outbound Beckn request as pretty JSON to stdout.
 func (s *ClientService) logBecknOut(action, method, url, txnID, msgID string, body []byte) {
-	s.lh.WithModule("beckn_client").LogActivity(
-		fmt.Sprintf("→ OUT  %-8s | txn=%.8s… | %s %s", strings.ToUpper(action), txnID, method, url),
-		becknOutActivity{
-			Action:  action,
-			Method:  method,
-			URL:     url,
-			TxnID:   txnID,
-			MsgID:   msgID,
-			Request: json.RawMessage(body),
-		},
-	)
+	entry := becknOutActivity{
+		Action:  action,
+		Method:  method,
+		URL:     url,
+		TxnID:   txnID,
+		MsgID:   msgID,
+		Request: json.RawMessage(body),
+	}
+	prettyLog(fmt.Sprintf("→ OUT  %-8s | txn=%.8s… | %s %s", strings.ToUpper(action), txnID, method, url), entry)
 }
 
-// logBecknAck emits a logharbour Activity entry after a successful Beckn call.
-// The human-readable banner appears in "msg"; full response JSON is in data.activity_data.
+// logBecknAck prints the Beckn adapter ACK response as pretty JSON to stdout.
 func (s *ClientService) logBecknAck(action, txnID string, status int, body []byte, dur time.Duration) {
-	s.lh.WithModule("beckn_client").LogActivity(
-		fmt.Sprintf("← ACK  %-8s | txn=%.8s… | http=%d | dur=%dms", strings.ToUpper(action), txnID, status, dur.Milliseconds()),
-		becknAckActivity{
-			Action:   action,
-			TxnID:    txnID,
-			HTTPCode: status,
-			DurMs:    dur.Milliseconds(),
-			Response: json.RawMessage(body),
-		},
-	)
+	entry := becknAckActivity{
+		Action:   action,
+		TxnID:    txnID,
+		HTTPCode: status,
+		DurMs:    dur.Milliseconds(),
+		Response: json.RawMessage(body),
+	}
+	prettyLog(fmt.Sprintf("← ACK  %-8s | txn=%.8s… | http=%d | dur=%dms", strings.ToUpper(action), txnID, status, dur.Milliseconds()), entry)
 }
 
-// logBecknErr emits a logharbour error Activity entry when a Beckn call fails.
+// logBecknErr prints the Beckn call failure as pretty JSON to stdout.
 func (s *ClientService) logBecknErr(action, txnID, url string, callErr error, dur time.Duration) {
-	s.lh.WithModule("beckn_client").Err().Error(callErr).LogActivity(
-		fmt.Sprintf("← ERR  %-8s | txn=%.8s… | dur=%dms | %s", strings.ToUpper(action), txnID, dur.Milliseconds(), callErr.Error()),
-		becknErrActivity{
-			Action: action,
-			TxnID:  txnID,
-			URL:    url,
-			DurMs:  dur.Milliseconds(),
-			Error:  callErr.Error(),
-		},
-	)
+	entry := becknErrActivity{
+		Action: action,
+		TxnID:  txnID,
+		URL:    url,
+		DurMs:  dur.Milliseconds(),
+		Error:  callErr.Error(),
+	}
+	prettyLog(fmt.Sprintf("← ERR  %-8s | txn=%.8s… | dur=%dms | %s", strings.ToUpper(action), txnID, dur.Milliseconds(), callErr.Error()), entry)
+}
+
+// prettyLog prints a labelled pretty-JSON block to stdout via the standard log package.
+func prettyLog(label string, v interface{}) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		log.Printf("[beckn] %s\n(marshal error: %v)", label, err)
+		return
+	}
+	log.Printf("[beckn] %s\n%s", label, string(b))
 }
 
 // --- Generic helpers ---

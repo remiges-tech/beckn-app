@@ -6,7 +6,9 @@ import (
 )
 
 // SelectItem represents a single line in a select request.
-// The frontend supplies the offer and provider details discovered earlier.
+// The frontend supplies the offer and provider details discovered earlier,
+// including the BPP identity from the catalog so the request is routed to
+// the correct BPP rather than the one hard-coded in server config.
 type SelectItem struct {
 	ResourceID      string          `json:"resource_id"`
 	OfferID         string          `json:"offer_id"`
@@ -15,19 +17,26 @@ type SelectItem struct {
 	ProviderID      string          `json:"provider_id,omitempty"`
 	ProviderName    string          `json:"provider_name,omitempty"`
 	OfferAttributes json.RawMessage `json:"offer_attributes,omitempty"`
+	// BppID and BppURI are populated from the catalog's bppId/bppUri fields in the
+	// discover response. They override the server-config defaults so the select is
+	// routed to the BPP that actually owns the resource.
+	BppID  string `json:"bpp_id,omitempty"`
+	BppURI string `json:"bpp_uri,omitempty"`
 }
 
 // ClientSelectRequest is the payload from the React frontend to initiate a Select.
-// BPP target (BppID, BppURI, NetworkID) is resolved from server config — not client-supplied.
+// BPP target is taken from the first item's BppID/BppURI (set from the catalog);
+// server config values are used only as a fallback when those fields are empty.
 type ClientSelectRequest struct {
 	Items []SelectItem `json:"items" binding:"required"`
 }
 
 // ClientInitRequest — frontend initiates Init.
+// Billing carries the structured buyer address/contact details; the BAP service
+// patches them into the on_select contract snapshot before sending to the adapter.
 type ClientInitRequest struct {
 	TransactionID string          `json:"transaction_id" binding:"required"`
 	Billing       json.RawMessage `json:"billing" binding:"required"`
-	Fulfillments  json.RawMessage `json:"fulfillments" binding:"required"`
 }
 
 // ClientConfirmRequest — frontend initiates Confirm.

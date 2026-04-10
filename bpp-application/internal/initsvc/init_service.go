@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -50,6 +51,8 @@ func (s *InitService) ProcessInit(ctx context.Context, req *InitRequest) {
 	txID, _ := uuid.Parse(req.Context.TransactionID)
 	inboundMsgID, _ := uuid.Parse(req.Context.MessageID)
 	reqJSON, _ := json.Marshal(req)
+
+	prettyLog(fmt.Sprintf("← IN   INIT      | txn=%.8s… | bap=%s", req.Context.TransactionID, req.Context.BapID), req)
 
 	// Persist contract state and get (or create) the contract ID.
 	contractID, err := s.persistContract(ctx, req)
@@ -329,9 +332,12 @@ func (s *InitService) callOnInit(
 		})
 	}()
 
+	prettyLog(fmt.Sprintf("→ OUT  ON_INIT   | txn=%.8s… | POST %s", txID, onInitURL), req)
+
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, onInitURL, bytes.NewReader(reqJSON))
 	if err != nil {
 		callErr = fmt.Errorf("build on_init request: %w", err)
+		prettyLog(fmt.Sprintf("← ERR  ON_INIT   | txn=%.8s… | dur=%dms | %s", txID, time.Since(start).Milliseconds(), callErr), map[string]string{"error": callErr.Error()})
 		s.lh.WithModule("initsvc").Err().Error(callErr).Log("on_init HTTP request build failed")
 		return
 	}
@@ -340,6 +346,7 @@ func (s *InitService) callOnInit(
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
 		callErr = fmt.Errorf("on_init HTTP call to BAP failed: %w", err)
+		prettyLog(fmt.Sprintf("← ERR  ON_INIT   | txn=%.8s… | dur=%dms | %s", txID, time.Since(start).Milliseconds(), callErr), map[string]string{"error": callErr.Error()})
 		s.lh.WithModule("initsvc").Err().Error(callErr).Log("on_init call failed")
 		return
 	}
@@ -349,10 +356,12 @@ func (s *InitService) callOnInit(
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		callErr = fmt.Errorf("BAP returned non-2xx status %d: %s", resp.StatusCode, string(respBody))
+		prettyLog(fmt.Sprintf("← ERR  ON_INIT   | txn=%.8s… | http=%d | dur=%dms | %s", txID, resp.StatusCode, time.Since(start).Milliseconds(), callErr), map[string]interface{}{"http_code": resp.StatusCode, "error": callErr.Error(), "response": json.RawMessage(respBody)})
 		s.lh.WithModule("initsvc").Warn().Error(callErr).Log("on_init BAP response error")
 		return
 	}
 
+	prettyLog(fmt.Sprintf("← ACK  ON_INIT   | txn=%.8s… | http=%d | dur=%dms", txID, resp.StatusCode, time.Since(start).Milliseconds()), map[string]interface{}{"http_code": resp.StatusCode, "response": json.RawMessage(respBody)})
 	s.lh.WithModule("initsvc").Log("on_init sent to BAP successfully")
 }
 
@@ -422,4 +431,14 @@ func uuidToPgtype(id uuid.UUID) pgtype.UUID {
 func durationMs(start time.Time) *int32 {
 	ms := int32(time.Since(start).Milliseconds())
 	return &ms
+}
+
+// prettyLog prints a labelled pretty-JSON block to stdout.
+func prettyLog(label string, v interface{}) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		log.Printf("[beckn] %s\n(marshal error: %v)", label, err)
+		return
+	}
+	log.Printf("[beckn] %s\n%s", label, string(b))
 }

@@ -291,7 +291,7 @@
           "response": []
         },
         {
-          "name": "Select — offer NOT in inventory (expect UNAVAILABLE in on_select)",
+          "name": "Select — offer NOT in inventory (expect CLOSED in on_select)",
           "event": [
             {
               "listen": "test",
@@ -303,7 +303,7 @@
                   "    const body = pm.response.json();",
                   "    pm.expect(body).to.have.nested.property('message.ack.status', 'ACK');",
                   "});",
-                  "// The BPP will fire on_select to the bapUri with commitment status UNAVAILABLE.",
+                  "// The BPP will fire on_select to the bapUri with commitment status CLOSED.",
                   "// No consideration is included in the on_select for missing offers."
                 ]
               }
@@ -319,7 +319,7 @@
               "host": ["{{base_url}}"],
               "path": ["beckn", "select"]
             },
-            "description": "Requests an offer ID that does not exist in the BPP's inventory.\n\n**Expected behaviour:**\n- HTTP 200 ACK is still returned (the request itself is valid).\n- BPP sends `on_select` to the BAP with commitment `status.descriptor.code = \"UNAVAILABLE\"` and no `consideration` block.\n- INBOUND and OUTBOUND log rows are still written to `beckn_message_log`.",
+            "description": "Requests an offer ID that does not exist in the BPP's inventory.\n\n**Expected behaviour:**\n- HTTP 200 ACK is still returned (the request itself is valid).\n- BPP sends `on_select` to the BAP with commitment `status.descriptor.code = \"CLOSED\"` and no `consideration` block.\n- INBOUND and OUTBOUND log rows are still written to `beckn_message_log`.",
             "body": {
               "mode": "raw",
               "options": { "raw": { "language": "json" } },
@@ -328,7 +328,7 @@
           },
           "response": [
             {
-              "name": "200 ACK — but on_select will carry UNAVAILABLE status",
+              "name": "200 ACK — but on_select will carry CLOSED status",
               "originalRequest": {
                 "method": "POST",
                 "header": [{ "key": "Content-Type", "value": "application/json" }],

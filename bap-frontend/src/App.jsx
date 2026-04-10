@@ -69,6 +69,9 @@ function parseCatalogs(data) {
         offerName:    offer?.descriptor?.name || offer?.descriptor?.shortDesc || '',
         providerId:   provider.id || '',
         sellerName,
+        // BPP identity from catalog — used to route the select to the correct BPP
+        bppId:        cat.bppId  || '',
+        bppUri:       cat.bppUri || '',
         offerAttr:    oa,   // raw offerAttributes from discover — passed to select API
         breakup,
         sellerAddress,
@@ -268,7 +271,7 @@ function ConfirmedQuotePanel({ quote, onInit, isLoading }) {
         </div>
         <button
           onClick={onInit} disabled={isLoading}
-          className="w-full mt-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+          className="w-full mt-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-emerald-600/30"
         >
           {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Initialize Order</span><ArrowRight className="w-4 h-4" /></>}
         </button>
@@ -353,7 +356,7 @@ function ProductModal({ product, transaction, onClose, onSelect, onInit, onConfi
           {/* No transaction yet — show Select button */}
           {!status && (
             <button onClick={() => onSelect(product)} disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]">
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] shadow-lg shadow-emerald-600/30">
               {isLoading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending select…</>
                 : <><Zap className="w-4 h-4" /> Select &amp; Confirm Quote</>}
@@ -384,7 +387,7 @@ function ProductModal({ product, transaction, onClose, onSelect, onInit, onConfi
                 Order initialized. Click below to place &amp; pay.
               </div>
               <button onClick={onConfirm} disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]">
+                className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-white py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] shadow-lg shadow-amber-500/30">
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ShieldCheck className="w-4 h-4" />Pay &amp; Confirm Order</>}
               </button>
             </div>
@@ -575,12 +578,49 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
                   />
                 </div>
                 <div className="relative">
-                  <Home className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-500" />
-                  <textarea
-                    rows={2} placeholder="Delivery address"
-                    value={billing.address}
-                    onChange={e => setBilling(p => ({ ...p, address: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors resize-none"
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="email" placeholder="Email address"
+                    value={billing.email}
+                    onChange={e => setBilling(p => ({ ...p, email: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                  />
+                </div>
+                <div className="relative">
+                  <Home className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="text" placeholder="Street address"
+                    value={billing.streetAddress}
+                    onChange={e => setBilling(p => ({ ...p, streetAddress: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text" placeholder="City"
+                    value={billing.addressLocality}
+                    onChange={e => setBilling(p => ({ ...p, addressLocality: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                  />
+                  <input
+                    type="text" placeholder="State"
+                    value={billing.addressRegion}
+                    onChange={e => setBilling(p => ({ ...p, addressRegion: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text" placeholder="Pincode"
+                    value={billing.postalCode}
+                    onChange={e => setBilling(p => ({ ...p, postalCode: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                  />
+                  <input
+                    type="text" placeholder="Country (e.g. IN)"
+                    value={billing.addressCountry}
+                    onChange={e => setBilling(p => ({ ...p, addressCountry: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                 </div>
               </div>
@@ -613,7 +653,8 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
             <div className="pt-1 text-xs text-slate-500 space-y-1">
               <p><span className="text-slate-400">Name:</span> {billing.name || 'Customer'}</p>
               <p><span className="text-slate-400">Phone:</span> {billing.phone || '—'}</p>
-              <p><span className="text-slate-400">Address:</span> {billing.address || '—'}</p>
+              {billing.email && <p><span className="text-slate-400">Email:</span> {billing.email}</p>}
+              <p><span className="text-slate-400">Address:</span> {[billing.streetAddress, billing.addressLocality, billing.addressRegion, billing.postalCode].filter(Boolean).join(', ') || '—'}</p>
             </div>
           </motion.div>
         )}
@@ -645,7 +686,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
               {billing.name && <p><span className="text-slate-400">Ordered by:</span> {billing.name}</p>}
             </div>
             <button onClick={onDone}
-              className="w-full mt-1 bg-emerald-500 hover:bg-emerald-400 text-slate-900 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
+              className="w-full mt-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30">
               <Sparkles className="w-4 h-4" /> Continue Shopping
             </button>
           </motion.div>
@@ -657,7 +698,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
         <div className="px-5 py-4 border-t border-white/[0.07] shrink-0">
           {status === 'QUOTE_RECEIVED' && (
             <button onClick={onInit} disabled={isLoading}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-emerald-600/30">
               {isLoading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Initializing…</>
                 : <><ArrowRight className="w-4 h-4" /> Initialize Order</>}
@@ -665,7 +706,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
           )}
           {status === 'INIT_RECEIVED' && (
             <button onClick={onConfirm} disabled={isLoading}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+              className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-amber-500/30">
               {isLoading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Confirming…</>
                 : <><ShieldCheck className="w-4 h-4" /> Pay &amp; Confirm Order</>}
@@ -690,7 +731,8 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [error, setError]               = useState(null);
   const [billing, setBilling]           = useState({
-    name: '', phone: '', address: '',
+    name: '', email: '', phone: '',
+    streetAddress: '', addressLocality: '', addressRegion: '', postalCode: '', addressCountry: 'IN',
   });
   const debounceRef = useRef(null);
 
@@ -756,6 +798,8 @@ export default function App() {
             provider_id:      product.providerId,
             provider_name:    product.sellerName,
             offer_attributes: product.offerAttr || {},
+            bpp_id:           product.bppId  || '',
+            bpp_uri:          product.bppUri || '',
           }],
         }),
       });
@@ -781,6 +825,8 @@ export default function App() {
             provider_id:      i.providerId   || '',
             provider_name:    i.sellerName   || '',
             offer_attributes: i.offerAttr    || {},
+            bpp_id:           i.bppId        || '',
+            bpp_uri:          i.bppUri       || '',
           })),
         }),
       });
@@ -803,11 +849,15 @@ export default function App() {
         body: JSON.stringify({
           transaction_id: transaction.id,
           billing: {
-            name:    billing.name    || 'Customer',
-            phone:   billing.phone   || '9999999999',
-            address: billing.address || 'Bengaluru, Karnataka',
+            name:            billing.name            || 'Customer',
+            email:           billing.email           || '',
+            phone:           billing.phone           || '9999999999',
+            streetAddress:   billing.streetAddress   || 'TBD',
+            addressLocality: billing.addressLocality || 'TBD',
+            addressRegion:   billing.addressRegion   || 'TBD',
+            postalCode:      billing.postalCode      || '000000',
+            addressCountry:  billing.addressCountry  || 'IN',
           },
-          fulfillments: [{ type: 'Delivery', end: { location: { gps: '12.9716,77.5946' } } }],
         }),
       });
       setTransaction(p => ({ ...p, status: 'INIT_SENT' }));
@@ -834,7 +884,7 @@ export default function App() {
     setCartCheckout(false);
     setTransaction(null);
     setCart([]);
-    setBilling({ name: '', phone: '', address: '' });
+    setBilling({ name: '', email: '', phone: '', streetAddress: '', addressLocality: '', addressRegion: '', postalCode: '', addressCountry: 'IN' });
     setIsCartOpen(false);
   };
 
@@ -1087,7 +1137,7 @@ export default function App() {
                         <span className="text-xl font-bold">{fmt(cartTotal, 'INR')}</span>
                       </div>
                       <button onClick={handleSelectCart} disabled={isLoading}
-                        className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-emerald-600/30">
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Proceed to Checkout</span><ChevronRight className="w-4 h-4" /></>}
                       </button>
                     </div>
