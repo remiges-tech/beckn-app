@@ -83,10 +83,17 @@ services:
       LOG_LEVEL: info
 
       BAP_ID: baptest1.remiges.tech
+      # BAP_URI goes in context.bapUri so the adapter/BPP knows where to send callbacks.
       BAP_URI: https://baptest.remiges.tech/bap/receiver
       NETWORK_ID: ion.id/ion-winroom-0426
-      # CDS discover endpoint — set to your CDS URL to enable live catalog discovery.
-      # Leave blank to serve an empty catalog (frontend shows no products).
+
+      # BPP identity placed in context.bppId / context.bppUri.
+      BPP_ID: bpptest1.remiges.tech
+      BPP_URI: http://bpptest.remiges.tech/bpp/receiver
+
+      # ADAPTER_URL is the ONIX BAP adapter the BAP actually POSTs to.
+      ADAPTER_URL: https://baptest.remiges.tech/bap/caller
+
       CDS_DISCOVER_URL: "https://34.47.138.217.sslip.io/beckn/discover"
     ports:
       - "8083:8083"

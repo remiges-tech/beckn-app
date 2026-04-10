@@ -26,6 +26,16 @@ func NewOnConfirmService(pool *pgxpool.Pool, cfg *config.Config, lh *logharbour.
 	return &OnConfirmService{pool: pool, cfg: cfg, lh: lh}
 }
 
+// becknInActivity is the structured payload logged when receiving an inbound Beckn callback.
+type becknInActivity struct {
+	Action  string          `json:"action"`
+	TxnID   string          `json:"txn_id"`
+	MsgID   string          `json:"msg_id"`
+	BapID   string          `json:"bap_id"`
+	BppID   string          `json:"bpp_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 // Process persists the on_confirm snapshot and writes to beckn_message_log.
 func (s *OnConfirmService) Process(ctx context.Context, req *OnConfirmRequest) {
 	start := time.Now()
@@ -82,7 +92,17 @@ func (s *OnConfirmService) Process(ctx context.Context, req *OnConfirmRequest) {
 		s.lh.WithModule("on_confirm_svc").Warn().Error(err).Log(fmt.Sprintf("message log insert failed: %v", err))
 	}
 
-	s.lh.WithModule("on_confirm_svc").Log("on_confirm processed for txn " + req.Context.TransactionID + " contractId=" + safeStr(contractID))
+	s.lh.WithModule("on_confirm_svc").LogActivity(
+		fmt.Sprintf("← IN   ON_CONFIRM | txn=%.8s… | bpp=%s | contractId=%s | dur=%dms", req.Context.TransactionID, req.Context.BppID, safeStr(contractID), time.Since(start).Milliseconds()),
+		becknInActivity{
+			Action:  "on_confirm",
+			TxnID:   req.Context.TransactionID,
+			MsgID:   req.Context.MessageID,
+			BapID:   req.Context.BapID,
+			BppID:   req.Context.BppID,
+			Payload: reqJSON,
+		},
+	)
 }
 
 // extractContractID pulls the "id" field from the contract JSON blob.

@@ -26,6 +26,16 @@ func NewOnInitService(pool *pgxpool.Pool, cfg *config.Config, lh *logharbour.Log
 	return &OnInitService{pool: pool, cfg: cfg, lh: lh}
 }
 
+// becknInActivity is the structured payload logged when receiving an inbound Beckn callback.
+type becknInActivity struct {
+	Action  string          `json:"action"`
+	TxnID   string          `json:"txn_id"`
+	MsgID   string          `json:"msg_id"`
+	BapID   string          `json:"bap_id"`
+	BppID   string          `json:"bpp_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 // Process persists the on_init snapshot and writes to beckn_message_log.
 func (s *OnInitService) Process(ctx context.Context, req *OnInitRequest) {
 	start := time.Now()
@@ -83,7 +93,17 @@ func (s *OnInitService) Process(ctx context.Context, req *OnInitRequest) {
 		s.lh.WithModule("on_init_svc").Warn().Error(err).Log(fmt.Sprintf("message log insert failed: %v", err))
 	}
 
-	s.lh.WithModule("on_init_svc").Log("on_init processed for txn " + req.Context.TransactionID + " contractId=" + safeStr(contractID))
+	s.lh.WithModule("on_init_svc").LogActivity(
+		fmt.Sprintf("← IN   ON_INIT   | txn=%.8s… | bpp=%s | contractId=%s | dur=%dms", req.Context.TransactionID, req.Context.BppID, safeStr(contractID), time.Since(start).Milliseconds()),
+		becknInActivity{
+			Action:  "on_init",
+			TxnID:   req.Context.TransactionID,
+			MsgID:   req.Context.MessageID,
+			BapID:   req.Context.BapID,
+			BppID:   req.Context.BppID,
+			Payload: reqJSON,
+		},
+	)
 }
 
 // extractContractID pulls the "id" field from the contract JSON blob.

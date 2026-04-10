@@ -5,20 +5,27 @@ import (
 	"time"
 )
 
+// SelectItem represents a single line in a select request.
+// The frontend supplies the offer and provider details discovered earlier.
+type SelectItem struct {
+	ResourceID      string          `json:"resource_id"`
+	OfferID         string          `json:"offer_id"`
+	OfferName       string          `json:"offer_name,omitempty"`
+	Quantity        int             `json:"quantity"`
+	ProviderID      string          `json:"provider_id,omitempty"`
+	ProviderName    string          `json:"provider_name,omitempty"`
+	OfferAttributes json.RawMessage `json:"offer_attributes,omitempty"`
+}
+
 // ClientSelectRequest is the payload from the React frontend to initiate a Select.
+// BPP target (BppID, BppURI, NetworkID) is resolved from server config — not client-supplied.
 type ClientSelectRequest struct {
-	BppID     string          `json:"bpp_id" binding:"required"`
-	BppURI    string          `json:"bpp_uri" binding:"required"`
-	NetworkID string          `json:"network_id" binding:"required"`
-	Items     json.RawMessage `json:"items" binding:"required"` // The selected items
+	Items []SelectItem `json:"items" binding:"required"`
 }
 
 // ClientInitRequest — frontend initiates Init.
 type ClientInitRequest struct {
 	TransactionID string          `json:"transaction_id" binding:"required"`
-	BppID         string          `json:"bpp_id" binding:"required"`
-	BppURI        string          `json:"bpp_uri" binding:"required"`
-	NetworkID     string          `json:"network_id" binding:"required"`
 	Billing       json.RawMessage `json:"billing" binding:"required"`
 	Fulfillments  json.RawMessage `json:"fulfillments" binding:"required"`
 }
@@ -26,17 +33,14 @@ type ClientInitRequest struct {
 // ClientConfirmRequest — frontend initiates Confirm.
 type ClientConfirmRequest struct {
 	TransactionID string `json:"transaction_id" binding:"required"`
-	BppID         string `json:"bpp_id" binding:"required"`
-	BppURI        string `json:"bpp_uri" binding:"required"`
-	NetworkID     string `json:"network_id" binding:"required"`
 }
 
 // ClientStatusResponse returns the current state of a transaction/contract.
 type ClientStatusResponse struct {
-	TransactionID string           `json:"transaction_id"`
-	Status        string           `json:"status"`
-	Contract      json.RawMessage  `json:"contract,omitempty"` // Latest snapshot
-	UpdatedAt     time.Time        `json:"updated_at"`
+	TransactionID string          `json:"transaction_id"`
+	Status        string          `json:"status"`
+	Contract      json.RawMessage `json:"contract,omitempty"` // Latest snapshot
+	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 // BecknRequest is the base structure for outbound Beckn calls (select/init/confirm).

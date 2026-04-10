@@ -5,12 +5,12 @@ import {
   ArrowRight, ChevronRight, Minus, Plus, Sparkles, Tag,
   RotateCcw, CreditCard, ShieldCheck, Clock,
   Star, Info, Receipt, Store, MapPin, Calendar, Zap,
+  User, Phone, Home, ChevronLeft, Banknote,
 } from 'lucide-react';
 
+// BPP target, network ID, and BAP identity are all server-side config (BAP .env).
+// The frontend only needs the API base path.
 const API_BASE = '/api/v1';
-const BPP_ID  = 'bpptest1.remiges.tech';
-const BPP_URI = 'https://bpptest.remiges.tech/bpp/receiver';
-const NET_ID  = 'ion.id/ion-winroom-0426';
 
 /* ─────────────────────────── helpers ────────────────────────────────────── */
 
@@ -64,11 +64,13 @@ function parseCatalogs(data) {
         currency,
         image: res.descriptor?.mediaFile?.[0]?.uri ||
           'https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=70',
-        // Full offer info for modal
-        offerId:    offer?.id || '',
-        offerName:  offer?.descriptor?.name || offer?.descriptor?.shortDesc || '',
-        breakup,
+        // Offer / provider info — needed for building Beckn select contract
+        offerId:      offer?.id || '',
+        offerName:    offer?.descriptor?.name || offer?.descriptor?.shortDesc || '',
+        providerId:   provider.id || '',
         sellerName,
+        offerAttr:    oa,   // raw offerAttributes from discover — passed to select API
+        breakup,
         sellerAddress,
         returnPolicy:   policies.returns,
         cancelPolicy:   policies.cancellation,
@@ -408,6 +410,273 @@ function ProductModal({ product, transaction, onClose, onSelect, onInit, onConfi
   );
 }
 
+/* ─────────────────────────── CheckoutFlow ──────────────────────────────── */
+// Multi-step checkout inside the cart drawer:
+//   SELECT_SENT → polling → QUOTE_RECEIVED → billing form → INIT_SENT → polling → INIT_RECEIVED → CONFIRM_SENT → CONFIRMED
+function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoading, onInit, onConfirm, onDone }) {
+  const status = transaction?.status;
+
+  // Parse BPP-confirmed quote from on_select
+  const confirmedQuote = (status === 'QUOTE_RECEIVED' && transaction?.contract)
+    ? parseOnSelectContract(
+        typeof transaction.contract === 'string'
+          ? JSON.parse(transaction.contract)
+          : transaction.contract
+      )
+    : null;
+
+  const currency = confirmedQuote?.currency || 'INR';
+
+  /* ── Stepper ───────────────────────────────────────────────────────── */
+  const STEPS = ['Quote', 'Billing', 'Confirm', 'Done'];
+  const stepIndex = {
+    SELECT_SENT:   0,
+    QUOTE_RECEIVED: 1,
+    INIT_SENT:     1,
+    INIT_RECEIVED: 2,
+    CONFIRM_SENT:  2,
+    CONFIRMED:     3,
+  }[status] ?? 0;
+
+  return (
+    <div className="flex flex-col flex-grow overflow-hidden">
+
+      {/* Stepper */}
+      <div className="px-5 pt-4 pb-3 shrink-0">
+        <div className="relative flex items-center justify-between">
+          <div className="absolute inset-x-0 top-3 h-px bg-white/10" />
+          <div className="absolute left-0 top-3 h-px bg-emerald-400 transition-all duration-700"
+            style={{ width: `${(stepIndex / (STEPS.length - 1)) * 100}%` }} />
+          {STEPS.map((label, i) => (
+            <div key={i} className="relative flex flex-col items-center gap-1.5 z-10">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-500 ${
+                i < stepIndex ? 'bg-emerald-400 text-slate-900' :
+                i === stepIndex ? 'bg-emerald-400 text-slate-900 ring-4 ring-emerald-400/20' :
+                'bg-slate-700 text-slate-400'}`}>
+                {i < stepIndex ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
+              </div>
+              <span className={`text-[10px] font-medium whitespace-nowrap ${i <= stepIndex ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-grow overflow-y-auto px-5 py-3 space-y-4">
+
+        {/* Cart items summary (always shown, compact) */}
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+          <div className="px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.07] flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Order Summary</span>
+            <span className="text-xs text-slate-400">{cart.reduce((s, i) => s + i.qty, 0)} items</span>
+          </div>
+          <div className="px-4 py-2 space-y-1.5">
+            {cart.map(item => (
+              <div key={item.id} className="flex items-center gap-2 py-1">
+                <div className="w-8 h-8 rounded-md overflow-hidden shrink-0 bg-slate-800">
+                  <img src={item.image} alt={item.name} className="w-full h-full object-cover"
+                    onError={e => { e.target.src = FALLBACK_IMG; }} />
+                </div>
+                <span className="flex-grow text-xs text-slate-300 truncate">{item.name}</span>
+                <span className="text-xs font-semibold text-slate-200 shrink-0">×{item.qty}</span>
+                <span className="text-xs font-bold shrink-0">{fmt(item.price * item.qty, item.currency)}</span>
+              </div>
+            ))}
+            <div className="border-t border-white/10 pt-2 flex justify-between items-center">
+              <span className="text-xs text-slate-400">Estimated Total</span>
+              <span className="text-base font-bold text-emerald-300">{fmt(cartTotal, 'INR')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Step: Waiting for on_select ─────────────────────────────── */}
+        {status === 'SELECT_SENT' && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+              <Sparkles className="absolute inset-0 m-auto w-5 h-5 text-emerald-400" />
+            </div>
+            <p className="text-sm text-slate-300">Getting quote from network…</p>
+            <p className="text-xs text-slate-500">Txn {transaction.id.slice(0, 8)}…</p>
+          </div>
+        )}
+
+        {/* ── Step: Quote received → show BPP quote + billing form ────── */}
+        {status === 'QUOTE_RECEIVED' && (
+          <div className="space-y-4">
+            {/* BPP confirmed quote */}
+            {confirmedQuote && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
+                <div className="px-4 py-2.5 bg-emerald-500/10 border-b border-emerald-500/15 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Quote Confirmed by Seller</span>
+                  {confirmedQuote.seller && (
+                    <span className="ml-auto text-[10px] text-slate-400 flex items-center gap-1">
+                      <Store className="w-3 h-3" />{confirmedQuote.seller}
+                    </span>
+                  )}
+                </div>
+                <div className="px-4 py-3 space-y-1.5">
+                  {confirmedQuote.breakup.map((b, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-slate-400">{b.title}</span>
+                      <span className={b.type === 'DISCOUNT' ? 'text-emerald-400' : b.type === 'TAX' ? 'text-amber-400' : 'text-slate-200'}>
+                        {fmt(b.amount, currency)}
+                      </span>
+                    </div>
+                  ))}
+                  {confirmedQuote.total && (
+                    <div className="border-t border-white/10 pt-2 flex justify-between font-bold">
+                      <span className="text-slate-200">Total</span>
+                      <span className="text-emerald-300 text-lg">{fmt(confirmedQuote.total, currency)}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {confirmedQuote.codAvailable && (
+                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Banknote className="w-2.5 h-2.5" /> COD Available
+                      </span>
+                    )}
+                    {confirmedQuote.returnPolicy?.allowed && (
+                      <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                        ↩ {confirmedQuote.returnPolicy.window} returns
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Billing form */}
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+              className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
+              <div className="px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.07] flex items-center gap-2">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Billing Details</span>
+              </div>
+              <div className="px-4 py-3 space-y-3">
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="text" placeholder="Full name"
+                    value={billing.name}
+                    onChange={e => setBilling(p => ({ ...p, name: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                  />
+                </div>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="tel" placeholder="Phone number"
+                    value={billing.phone}
+                    onChange={e => setBilling(p => ({ ...p, phone: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                  />
+                </div>
+                <div className="relative">
+                  <Home className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-500" />
+                  <textarea
+                    rows={2} placeholder="Delivery address"
+                    value={billing.address}
+                    onChange={e => setBilling(p => ({ ...p, address: e.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors resize-none"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* ── Step: Waiting for on_init ──────────────────────────────── */}
+        {status === 'INIT_SENT' && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+              <ShieldCheck className="absolute inset-0 m-auto w-5 h-5 text-emerald-400" />
+            </div>
+            <p className="text-sm text-slate-300">Initializing your order…</p>
+          </div>
+        )}
+
+        {/* ── Step: Init received → ready to confirm ─────────────────── */}
+        {status === 'INIT_RECEIVED' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
+              <p className="text-sm font-medium text-blue-300">Order Initialized</p>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Your order is ready. Review the details above and confirm to place your order on the Beckn network.
+            </p>
+            <div className="pt-1 text-xs text-slate-500 space-y-1">
+              <p><span className="text-slate-400">Name:</span> {billing.name || 'Customer'}</p>
+              <p><span className="text-slate-400">Phone:</span> {billing.phone || '—'}</p>
+              <p><span className="text-slate-400">Address:</span> {billing.address || '—'}</p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Step: Waiting for on_confirm ──────────────────────────── */}
+        {status === 'CONFIRM_SENT' && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+              <Banknote className="absolute inset-0 m-auto w-5 h-5 text-emerald-400" />
+            </div>
+            <p className="text-sm text-slate-300">Placing your order…</p>
+          </div>
+        )}
+
+        {/* ── Step: Confirmed ────────────────────────────────────────── */}
+        {status === 'CONFIRMED' && (
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="flex flex-col items-center gap-3 py-6 text-center">
+            <div className="w-18 h-18 w-16 h-16 rounded-full bg-emerald-500/15 border-2 border-emerald-500/40 flex items-center justify-center">
+              <CheckCircle2 className="w-9 h-9 text-emerald-400" />
+            </div>
+            <div>
+              <p className="font-bold text-emerald-300 text-xl">Order Placed!</p>
+              <p className="text-sm text-slate-400 mt-1">Your order has been confirmed on the Beckn network.</p>
+            </div>
+            <div className="w-full mt-1 text-xs text-slate-500 bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-2.5 text-left space-y-1">
+              <p><span className="text-slate-400">Transaction:</span> {transaction.id}</p>
+              {billing.name && <p><span className="text-slate-400">Ordered by:</span> {billing.name}</p>}
+            </div>
+            <button onClick={onDone}
+              className="w-full mt-1 bg-emerald-500 hover:bg-emerald-400 text-slate-900 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
+              <Sparkles className="w-4 h-4" /> Continue Shopping
+            </button>
+          </motion.div>
+        )}
+      </div>
+
+      {/* ── Sticky action footer ────────────────────────────────────── */}
+      {(status === 'QUOTE_RECEIVED' || status === 'INIT_RECEIVED') && (
+        <div className="px-5 py-4 border-t border-white/[0.07] shrink-0">
+          {status === 'QUOTE_RECEIVED' && (
+            <button onClick={onInit} disabled={isLoading}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+              {isLoading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Initializing…</>
+                : <><ArrowRight className="w-4 h-4" /> Initialize Order</>}
+            </button>
+          )}
+          {status === 'INIT_RECEIVED' && (
+            <button onClick={onConfirm} disabled={isLoading}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+              {isLoading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Confirming…</>
+                : <><ShieldCheck className="w-4 h-4" /> Pay &amp; Confirm Order</>}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────────── App ────────────────────────────────────────── */
 export default function App() {
   const [catalog, setCatalog]           = useState([]);
@@ -417,9 +686,12 @@ export default function App() {
   const [transaction, setTransaction]   = useState(null);
   const [isLoading, setIsLoading]       = useState(false);
   const [isCartOpen, setIsCartOpen]     = useState(false);
+  const [cartCheckout, setCartCheckout] = useState(false); // true when cart is in checkout mode
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [activeStep, setActiveStep]     = useState(0);
   const [error, setError]               = useState(null);
+  const [billing, setBilling]           = useState({
+    name: '', phone: '', address: '',
+  });
   const debounceRef = useRef(null);
 
   /* ── Discover ─────────────────────────────────────────────────────────── */
@@ -463,12 +735,7 @@ export default function App() {
     const id = setInterval(() => {
       fetch(`${API_BASE}/status/${transaction.id}`)
         .then(r => r.json())
-        .then(d => {
-          setTransaction(p => ({ ...p, ...d }));
-          if (d.status === 'QUOTE_RECEIVED') setActiveStep(1);
-          if (d.status === 'INIT_RECEIVED')  setActiveStep(2);
-          if (d.status === 'CONFIRMED')      setActiveStep(3);
-        })
+        .then(d => { setTransaction(p => ({ ...p, ...d })); })
         .catch(() => {});
     }, 2000);
     return () => clearInterval(id);
@@ -481,14 +748,20 @@ export default function App() {
       const r = await fetch(`${API_BASE}/select`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bpp_id: BPP_ID, bpp_uri: BPP_URI, network_id: NET_ID,
-          items: [{ id: product.id, quantity: { count: 1 } }],
+          items: [{
+            resource_id:      product.id,
+            offer_id:         product.offerId,
+            offer_name:       product.offerName,
+            quantity:         1,
+            provider_id:      product.providerId,
+            provider_name:    product.sellerName,
+            offer_attributes: product.offerAttr || {},
+          }],
         }),
       });
       if (!r.ok) throw new Error(await r.text());
       const d = await r.json();
       setTransaction({ id: d.transaction_id, status: 'SELECT_SENT', product });
-      setActiveStep(0);
     } catch (e) { alert('Select failed: ' + e.message); }
     finally { setIsLoading(false); }
   };
@@ -500,15 +773,22 @@ export default function App() {
       const r = await fetch(`${API_BASE}/select`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bpp_id: BPP_ID, bpp_uri: BPP_URI, network_id: NET_ID,
-          items: cart.map(i => ({ id: i.id, quantity: { count: i.qty } })),
+          items: cart.map(i => ({
+            resource_id:      i.id,
+            offer_id:         i.offerId      || '',
+            offer_name:       i.offerName    || i.name,
+            quantity:         i.qty,
+            provider_id:      i.providerId   || '',
+            provider_name:    i.sellerName   || '',
+            offer_attributes: i.offerAttr    || {},
+          })),
         }),
       });
       if (!r.ok) throw new Error(await r.text());
       const d = await r.json();
       setTransaction({ id: d.transaction_id, status: 'SELECT_SENT' });
-      setIsCartOpen(false);
-      setActiveStep(0);
+      setCartCheckout(true);
+      setIsCartOpen(true);
     } catch (e) { alert('Select failed: ' + e.message); }
     finally { setIsLoading(false); }
   };
@@ -522,8 +802,11 @@ export default function App() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transaction_id: transaction.id,
-          bpp_id: BPP_ID, bpp_uri: BPP_URI, network_id: NET_ID,
-          billing: { name: 'John Doe', phone: '9999999999', address: '123 Green Street' },
+          billing: {
+            name:    billing.name    || 'Customer',
+            phone:   billing.phone   || '9999999999',
+            address: billing.address || 'Bengaluru, Karnataka',
+          },
           fulfillments: [{ type: 'Delivery', end: { location: { gps: '12.9716,77.5946' } } }],
         }),
       });
@@ -539,17 +822,21 @@ export default function App() {
     try {
       await fetch(`${API_BASE}/confirm`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transaction_id: transaction.id,
-          bpp_id: BPP_ID, bpp_uri: BPP_URI, network_id: NET_ID,
-        }),
+        body: JSON.stringify({ transaction_id: transaction.id }),
       });
       setTransaction(p => ({ ...p, status: 'CONFIRM_SENT' }));
     } catch (e) { alert('Confirm failed: ' + e.message); }
     finally { setIsLoading(false); }
   };
 
-  const stepLabels = ['Browse', 'Quote', 'Init', 'Confirmed'];
+  /* ── Reset cart checkout back to browsing ─────────────────────────────── */
+  const resetCart = () => {
+    setCartCheckout(false);
+    setTransaction(null);
+    setCart([]);
+    setBilling({ name: '', phone: '', address: '' });
+    setIsCartOpen(false);
+  };
 
   /* ── Render ───────────────────────────────────────────────────────────── */
   return (
@@ -561,7 +848,7 @@ export default function App() {
           <div className="flex items-center gap-2 shrink-0">
             <Sparkles className="w-5 h-5 text-emerald-400" />
             <span className="text-lg font-bold gradient-text" style={{ fontFamily: 'Syne, sans-serif' }}>
-              NearShop
+              OpenBasket
             </span>
           </div>
 
@@ -605,7 +892,7 @@ export default function App() {
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
             <p className="text-xs uppercase tracking-widest text-emerald-400 font-semibold mb-1">
-              Beckn Network · {NET_ID}
+              Beckn Network · ion.id/ion-winroom-0426
             </p>
             <h1 className="text-3xl sm:text-4xl gradient-text">
               {searchQuery ? `"${searchQuery}"` : 'Discover Products'}
@@ -735,116 +1022,93 @@ export default function App() {
         {isCartOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={() => setIsCartOpen(false)} />
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+              onClick={() => { if (!cartCheckout) setIsCartOpen(false); }} />
             <motion.aside
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
               className="fixed right-0 top-0 h-full w-full max-w-sm glass z-50 flex flex-col shadow-2xl"
             >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
+              {/* ── Drawer header ─────────────────────────────────── */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07] shrink-0">
                 <div className="flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5 text-emerald-400" />
-                  <h2 className="text-lg">Your Cart</h2>
-                  {cartCount > 0 && <span className="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full">{cartCount}</span>}
+                  {cartCheckout && transaction?.status !== 'CONFIRMED' && (
+                    <button onClick={() => { setCartCheckout(false); setTransaction(null); }}
+                      className="text-slate-400 hover:text-white transition-colors mr-1">
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                  )}
+                  {cartCheckout
+                    ? <><Receipt className="w-5 h-5 text-emerald-400" /><h2 className="text-lg">Checkout</h2></>
+                    : <><ShoppingCart className="w-5 h-5 text-emerald-400" /><h2 className="text-lg">Your Cart</h2>
+                        {cartCount > 0 && <span className="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full">{cartCount}</span>}</>
+                  }
                 </div>
-                <button onClick={() => setIsCartOpen(false)} className="text-slate-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
-              </div>
-
-              <div className="flex-grow overflow-y-auto px-5 py-4 space-y-3">
-                {cart.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3">
-                    <ShoppingCart className="w-12 h-12 opacity-20" />
-                    <p className="text-sm">Your cart is empty</p>
-                    <p className="text-xs opacity-60">Click any product to view &amp; select it</p>
-                  </div>
-                ) : cart.map(item => (
-                  <div key={item.id} className="flex gap-3 items-center p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl">
-                    <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-slate-800">
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" onError={e => { e.target.src = FALLBACK_IMG; }} />
-                    </div>
-                    <div className="flex-grow min-w-0">
-                      <p className="text-sm font-medium truncate">{item.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{fmt(item.price, item.currency)} each</p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-md bg-white/[0.06] hover:bg-white/10 transition-colors"><Minus className="w-3 h-3" /></button>
-                      <span className="w-6 text-center text-sm font-bold">{item.qty}</span>
-                      <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-md bg-white/[0.06] hover:bg-white/10 transition-colors"><Plus className="w-3 h-3" /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {cart.length > 0 && (
-                <div className="px-5 py-4 border-t border-white/[0.07] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-sm">Total</span>
-                    <span className="text-xl font-bold">₹{cartTotal.toLocaleString()}</span>
-                  </div>
-                  <button onClick={handleSelectCart} disabled={isLoading}
-                    className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Proceed to Checkout</span><ChevronRight className="w-4 h-4" /></>}
+                {!cartCheckout && (
+                  <button onClick={() => setIsCartOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
                   </button>
-                </div>
+                )}
+              </div>
+
+              {/* ── CART MODE: item list ──────────────────────────── */}
+              {!cartCheckout && (
+                <>
+                  <div className="flex-grow overflow-y-auto px-5 py-4 space-y-3">
+                    {cart.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3 py-16">
+                        <ShoppingCart className="w-12 h-12 opacity-20" />
+                        <p className="text-sm">Your cart is empty</p>
+                        <p className="text-xs opacity-60">Click any product card to add items</p>
+                      </div>
+                    ) : cart.map(item => (
+                      <div key={item.id} className="flex gap-3 items-center p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-slate-800">
+                          <img src={item.image} alt={item.name} className="w-full h-full object-cover"
+                            onError={e => { e.target.src = FALLBACK_IMG; }} />
+                        </div>
+                        <div className="flex-grow min-w-0">
+                          <p className="text-sm font-medium truncate">{item.name}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{fmt(item.price, item.currency)} × {item.qty} = {fmt(item.price * item.qty, item.currency)}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-md bg-white/[0.06] hover:bg-white/10 transition-colors"><Minus className="w-3 h-3" /></button>
+                          <span className="w-6 text-center text-sm font-bold">{item.qty}</span>
+                          <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-md bg-white/[0.06] hover:bg-white/10 transition-colors"><Plus className="w-3 h-3" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {cart.length > 0 && (
+                    <div className="px-5 py-4 border-t border-white/[0.07] space-y-3 shrink-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 text-sm">{cartCount} item{cartCount !== 1 ? 's' : ''}</span>
+                        <span className="text-xl font-bold">{fmt(cartTotal, 'INR')}</span>
+                      </div>
+                      <button onClick={handleSelectCart} disabled={isLoading}
+                        className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-900 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Proceed to Checkout</span><ChevronRight className="w-4 h-4" /></>}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── CHECKOUT MODE ─────────────────────────────────── */}
+              {cartCheckout && (
+                <CheckoutFlow
+                  cart={cart} cartTotal={cartTotal}
+                  transaction={transaction}
+                  billing={billing} setBilling={setBilling}
+                  isLoading={isLoading}
+                  onInit={handleInit}
+                  onConfirm={handleConfirm}
+                  onDone={resetCart}
+                />
               )}
             </motion.aside>
           </>
-        )}
-      </AnimatePresence>
-
-      {/* ── Bottom progress bar (cart checkout / no modal) ────────────────── */}
-      <AnimatePresence>
-        {transaction && !selectedProduct && (
-          <motion.div
-            initial={{ y: 120, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 120, opacity: 0 }}
-            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-2xl"
-          >
-            <div className="glass rounded-2xl p-5 shadow-2xl border border-emerald-500/10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 pulse-dot" />
-                  <span className="text-xs font-medium text-slate-300">Txn {transaction.id.slice(0, 8)}…</span>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-widest bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                  {(transaction.status || '').replace('_', ' ')}
-                </span>
-              </div>
-
-              {/* Stepper */}
-              <div className="relative flex items-center justify-between mb-4 px-2">
-                <div className="absolute inset-x-2 top-3 h-px bg-white/10" />
-                <div className="absolute left-2 top-3 h-px bg-emerald-400 transition-all duration-700" style={{ width: `${(activeStep / 3) * 100}%` }} />
-                {stepLabels.map((label, i) => (
-                  <div key={i} className="relative flex flex-col items-center gap-1.5 z-10">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-500 ${i < activeStep ? 'bg-emerald-400 text-slate-900' : i === activeStep ? 'bg-emerald-400 text-slate-900 ring-4 ring-emerald-400/20' : 'bg-slate-700 text-slate-400'}`}>
-                      {i < activeStep ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
-                    </div>
-                    <span className={`text-[10px] font-medium whitespace-nowrap ${i <= activeStep ? 'text-emerald-400' : 'text-slate-500'}`}>{label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-3 justify-center">
-                {transaction.status === 'QUOTE_RECEIVED' && (
-                  <button onClick={handleInit} disabled={isLoading}
-                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Initialize Order</span><ArrowRight className="w-4 h-4" /></>}
-                  </button>
-                )}
-                {transaction.status === 'INIT_RECEIVED' && (
-                  <button onClick={handleConfirm} disabled={isLoading}
-                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95">
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Pay &amp; Confirm</span><CheckCircle2 className="w-4 h-4" /></>}
-                  </button>
-                )}
-                {transaction.status === 'CONFIRMED' && (
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                    <CheckCircle2 className="w-5 h-5" /> Order Confirmed!
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
     </div>

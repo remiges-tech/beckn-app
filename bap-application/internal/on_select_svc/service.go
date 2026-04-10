@@ -26,6 +26,16 @@ func NewOnSelectService(pool *pgxpool.Pool, cfg *config.Config, lh *logharbour.L
 	return &OnSelectService{pool: pool, cfg: cfg, lh: lh}
 }
 
+// becknInActivity is the structured payload logged when receiving an inbound Beckn callback.
+type becknInActivity struct {
+	Action  string          `json:"action"`
+	TxnID   string          `json:"txn_id"`
+	MsgID   string          `json:"msg_id"`
+	BapID   string          `json:"bap_id"`
+	BppID   string          `json:"bpp_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 // Process persists the on_select snapshot and writes to beckn_message_log.
 func (s *OnSelectService) Process(ctx context.Context, req *OnSelectRequest) {
 	start := time.Now()
@@ -80,7 +90,17 @@ func (s *OnSelectService) Process(ctx context.Context, req *OnSelectRequest) {
 		s.lh.WithModule("on_select_svc").Warn().Error(err).Log(fmt.Sprintf("message log insert failed: %v", err))
 	}
 
-	s.lh.WithModule("on_select_svc").Log("on_select processed for txn " + req.Context.TransactionID)
+	s.lh.WithModule("on_select_svc").LogActivity(
+		fmt.Sprintf("← IN   ON_SELECT | txn=%.8s… | bpp=%s | dur=%dms", req.Context.TransactionID, req.Context.BppID, time.Since(start).Milliseconds()),
+		becknInActivity{
+			Action:  "on_select",
+			TxnID:   req.Context.TransactionID,
+			MsgID:   req.Context.MessageID,
+			BapID:   req.Context.BapID,
+			BppID:   req.Context.BppID,
+			Payload: reqJSON,
+		},
+	)
 }
 
 func strPtr(s string) *string {
