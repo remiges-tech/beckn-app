@@ -25,8 +25,13 @@ type Config struct {
 
 	// Beckn network identity for this BPP.
 	BppID     string // Subscriber ID registered on the Beckn network (e.g. "bpptest1.remiges.tech")
-	BppURI    string // Callback URL the BPP exposes to the network (e.g. "https://bpptest1.remiges.tech/callback")
+	BppURI    string // Callback URL the BPP exposes to the network (e.g. "https://bpptest1.remiges.tech/bpp/receiver")
 	NetworkID string // Beckn network identifier (e.g. "beckn.one/ion-retail")
+
+	// BppCallerURL is the ONIX BPP caller base URL used for outbound on_* callbacks.
+	// Example: https://bpptest.remiges.tech/bpp/caller
+	// If empty, the service derives it from BppURI by replacing /bpp/receiver with /bpp/caller.
+	BppCallerURL string
 
 	// CDSPublishURL is the catalog discovery service endpoint that receives catalog/publish requests.
 	CDSPublishURL string
@@ -47,9 +52,10 @@ func Load() (*Config, error) {
 
 		LogLevel: getEnv("LOG_LEVEL", "info"),
 
-		BppID:     os.Getenv("BPP_ID"),
-		BppURI:    os.Getenv("BPP_URI"),
-		NetworkID: os.Getenv("NETWORK_ID"),
+		BppID:        os.Getenv("BPP_ID"),
+		BppURI:       os.Getenv("BPP_URI"),
+		NetworkID:    os.Getenv("NETWORK_ID"),
+		BppCallerURL: os.Getenv("BPP_CALLER_URL"),
 
 		CDSPublishURL: os.Getenv("CDS_PUBLISH_URL"),
 	}

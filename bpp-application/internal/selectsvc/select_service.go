@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -89,8 +90,8 @@ func (s *SelectService) ProcessSelect(ctx context.Context, req *SelectRequest) {
 		ProcessingDurationMs: durationMs(start),
 	})
 
-	// POST on_select to BAP and log OUTBOUND.
-	s.callOnSelect(ctx, txID, outboundMsgID, req.Context.BapURI, onSelectReq)
+	// POST on_select through ONIX BPP caller (so the request is signed) and log OUTBOUND.
+	s.callOnSelect(ctx, txID, outboundMsgID, onSelectReq)
 }
 
 // enrichContract builds a copy of the inbound contract with each commitment
@@ -181,6 +182,19 @@ func (s *SelectService) enrichCommitment(
 	if dbOffer.ProviderID != nil {
 		providerID = *dbOffer.ProviderID
 	}
+	provider := &Provider{ID: providerID}
+	if c.Offer != nil && c.Offer.Provider != nil {
+		if c.Offer.Provider.ID != "" {
+			provider.ID = c.Offer.Provider.ID
+		}
+		if c.Offer.Provider.Descriptor != nil {
+			provider.Descriptor = &Descriptor{
+				Name:      c.Offer.Provider.Descriptor.Name,
+				ShortDesc: c.Offer.Provider.Descriptor.ShortDesc,
+				LongDesc:  c.Offer.Provider.Descriptor.LongDesc,
+			}
+		}
+	}
 	enriched.Offer = &Offer{
 		ID:          dbOffer.ID,
 		ResourceIDs: dbOffer.ResourceIds,
@@ -188,7 +202,7 @@ func (s *SelectService) enrichCommitment(
 			Name:      strVal(dbOffer.DescriptorName),
 			ShortDesc: strVal(dbOffer.DescriptorShortDesc),
 		},
-		Provider:        &Provider{ID: providerID},
+		Provider:        provider,
 		OfferAttributes: dbOffer.OfferAttributes,
 	}
 
@@ -235,17 +249,36 @@ func (s *SelectService) enrichCommitment(
 	return
 }
 
-// callOnSelect POSTs the on_select payload to the BAP and logs the OUTBOUND entry.
+// callOnSelect POSTs the on_select payload via ONIX BPP caller and logs the OUTBOUND entry.
 func (s *SelectService) callOnSelect(
 	ctx context.Context,
 	txID uuid.UUID,
 	msgID uuid.UUID,
-	bapURI string,
 	req OnSelectRequest,
 ) {
 	start := time.Now()
-	onSelectURL := bapURI + "/on_select"
+	onSelectURL, err := s.resolveOnSelectURL(req.Context.BapURI)
 	reqJSON, _ := json.Marshal(req)
+
+	if err != nil {
+		s.lh.WithModule("selectsvc").Err().Error(err).Log("on_select target resolution failed")
+		s.writeMessageLog(ctx, dbsqlc.InsertMessageLogParams{
+			TransactionID:        uuidToPgtype(txID),
+			MessageID:            msgID,
+			Action:               dbsqlc.BecknActionOnSelect,
+			Direction:            dbsqlc.MessageDirectionOUTBOUND,
+			BapID:                strPtr(req.Context.BapID),
+			BapUri:               strPtr(req.Context.BapURI),
+			BppID:                strPtr(req.Context.BppID),
+			BppUri:               strPtr(req.Context.BppURI),
+			NetworkID:            strPtr(req.Context.NetworkID),
+			AckStatus:            dbsqlc.NullAckStatus{AckStatus: dbsqlc.AckStatusNACK, Valid: true},
+			RequestPayload:       reqJSON,
+			ErrorMessage:         errStrPtr(err),
+			ProcessingDurationMs: durationMs(start),
+		})
+		return
+	}
 
 	var (
 		respBody []byte
@@ -286,7 +319,7 @@ func (s *SelectService) callOnSelect(
 
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
-		callErr = fmt.Errorf("on_select HTTP call to BAP failed: %w", err)
+		callErr = fmt.Errorf("on_select HTTP call failed: %w", err)
 		s.lh.WithModule("selectsvc").Err().Error(callErr).Log("on_select call failed")
 		return
 	}
@@ -295,12 +328,12 @@ func (s *SelectService) callOnSelect(
 	respBody, _ = io.ReadAll(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		callErr = fmt.Errorf("BAP returned non-2xx status %d: %s", resp.StatusCode, string(respBody))
-		s.lh.WithModule("selectsvc").Warn().Error(callErr).Log("on_select BAP response error")
+		callErr = fmt.Errorf("on_select returned non-2xx status %d: %s", resp.StatusCode, string(respBody))
+		s.lh.WithModule("selectsvc").Warn().Error(callErr).Log("on_select response error")
 		return
 	}
 
-	s.lh.WithModule("selectsvc").Log("on_select sent to BAP successfully")
+	s.lh.WithModule("selectsvc").Log("on_select sent successfully")
 }
 
 // writeMessageLog inserts one audit row into beckn_message_log.
@@ -318,6 +351,30 @@ func (s *SelectService) writeMessageLog(ctx context.Context, params dbsqlc.Inser
 
 func unavailableStatus() *CommitmentStatus {
 	return &CommitmentStatus{Descriptor: &StatusDescriptor{Code: "UNAVAILABLE"}}
+}
+
+// resolveOnSelectURL returns the ONIX BPP caller on_select endpoint.
+// Priority:
+//  1. BPP_CALLER_URL env/config (e.g. https://bpptest.remiges.tech/bpp/caller)
+//  2. Derived from BPP_URI by replacing /bpp/receiver with /bpp/caller
+func (s *SelectService) resolveOnSelectURL(_ string) (string, error) {
+	base := strings.TrimSpace(s.cfg.BppCallerURL)
+	if base == "" {
+		base = strings.TrimSpace(s.cfg.BppURI)
+		if base == "" {
+			return "", fmt.Errorf("cannot resolve on_select URL: both BPP_CALLER_URL and BPP_URI are empty")
+		}
+		if strings.HasSuffix(base, "/") {
+			base = strings.TrimSuffix(base, "/")
+		}
+		if strings.HasSuffix(base, "/bpp/receiver") {
+			base = strings.TrimSuffix(base, "/bpp/receiver") + "/bpp/caller"
+		} else {
+			return "", fmt.Errorf("cannot derive caller URL from BPP_URI %q; set BPP_CALLER_URL", s.cfg.BppURI)
+		}
+	}
+	base = strings.TrimRight(base, "/")
+	return base + "/on_select", nil
 }
 
 // extractQty returns the quantity from the BAP's commitmentAttributes JSON.
@@ -347,11 +404,9 @@ func mergePrice(raw json.RawMessage, unitPrice float64, currency string, qty flo
 		"currency": currency,
 	})
 	m["price"] = priceJSON
-	totalJSON, _ := json.Marshal(map[string]any{
-		"value":    unitPrice * qty,
-		"currency": currency,
-	})
-	m["totalPrice"] = totalJSON
+	// totalPrice is intentionally not added here because RetailCommitment v2.1
+	// does not allow that field (additionalProperties=false).
+	// Aggregate totals are carried at contract.consideration level.
 	merged, _ := json.Marshal(m)
 	return merged
 }
