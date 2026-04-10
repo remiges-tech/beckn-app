@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+:root {
+  --brand:       #00b8e6;
+  --brand-dark:  #0099cc;
+  --brand-pink:  #e6006e;
+  --brand-navy:  #1e2fa0;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -7,10 +14,23 @@
 body {
   margin: 0;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  background: #0f1117;
+  background: #080d1e;
+  background-image:
+    radial-gradient(ellipse 60% 35% at 10% 0%,    rgba(0,184,230,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 30% at 95% 100%,  rgba(230,0,110,0.05) 0%, transparent 55%);
   color: #e2e8f0;
   -webkit-font-smoothing: antialiased;
 }
+
+/* ── Scrollbar ───────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+
+/* ── Remove scrollbar from category chips ────────── */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
 ::-webkit-scrollbar {
   width: 6px;

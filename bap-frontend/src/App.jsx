@@ -401,7 +401,7 @@ function ProductModal({ product, transaction, onClose, onSelect, onInit, onConfi
                 <CheckCircle2 className="w-8 h-8 text-emerald-400" />
               </div>
               <p className="font-bold text-emerald-300 text-lg">Order Confirmed!</p>
-              <p className="text-sm text-slate-400 text-center">Your order has been placed on the Beckn network.</p>
+              <p className="text-sm text-slate-400 text-center">Your order has been placed on the ION network.</p>
               <button onClick={onClose} className="mt-1 text-sm text-slate-400 hover:text-white transition-colors underline underline-offset-4">
                 Continue Shopping
               </button>
@@ -648,7 +648,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
               <p className="text-sm font-medium text-blue-300">Order Initialized</p>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Your order is ready. Review the details above and confirm to place your order on the Beckn network.
+              Your order is ready. Review the details above and confirm to place your order on the ION network.
             </p>
             <div className="pt-1 text-xs text-slate-500 space-y-1">
               <p><span className="text-slate-400">Name:</span> {billing.name || 'Customer'}</p>
@@ -679,7 +679,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
             </div>
             <div>
               <p className="font-bold text-emerald-300 text-xl">Order Placed!</p>
-              <p className="text-sm text-slate-400 mt-1">Your order has been confirmed on the Beckn network.</p>
+              <p className="text-sm text-slate-400 mt-1">Your order has been confirmed on the ION network.</p>
             </div>
             <div className="w-full mt-1 text-xs text-slate-500 bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-2.5 text-left space-y-1">
               <p><span className="text-slate-400">Transaction:</span> {transaction.id}</p>
@@ -727,9 +727,11 @@ export default function App() {
   const [transaction, setTransaction]   = useState(null);
   const [isLoading, setIsLoading]       = useState(false);
   const [isCartOpen, setIsCartOpen]     = useState(false);
-  const [cartCheckout, setCartCheckout] = useState(false); // true when cart is in checkout mode
+  const [cartCheckout, setCartCheckout] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [error, setError]               = useState(null);
+  const [activeCategory, setActiveCategory]   = useState('All');
+  const [sortBy, setSortBy]             = useState('default');
   const [billing, setBilling]           = useState({
     name: '', email: '', phone: '',
     streetAddress: '', addressLocality: '', addressRegion: '', postalCode: '', addressCountry: 'IN',
@@ -745,7 +747,7 @@ export default function App() {
       : `${API_BASE}/discover`;
     fetch(url)
       .then(r => { if (!r.ok) throw new Error(`Status ${r.status}`); return r.json(); })
-      .then(d => setCatalog(parseCatalogs(d)))
+      .then(d => { setCatalog(parseCatalogs(d)); setActiveCategory('All'); })
       .catch(e => { setError(e.message); setCatalog([]); })
       .finally(() => setIsSearching(false));
   }, []);
@@ -758,6 +760,18 @@ export default function App() {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => discover(v), 500);
   };
+
+  /* ── Derived: categories + filtered + sorted catalog ─────────────────── */
+  const categories = ['All', ...Array.from(new Set(catalog.map(p => p.category))).filter(Boolean)];
+
+  const visibleCatalog = catalog
+    .filter(p => activeCategory === 'All' || p.category === activeCategory)
+    .sort((a, b) => {
+      if (sortBy === 'price_asc')  return a.price - b.price;
+      if (sortBy === 'price_desc') return b.price - a.price;
+      if (sortBy === 'name')       return a.name.localeCompare(b.name);
+      return 0;
+    });
 
   /* ── Cart ─────────────────────────────────────────────────────────────── */
   const updateQty = (id, delta) =>
@@ -895,12 +909,14 @@ export default function App() {
       {/* ── Nav ──────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 glass border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
-          <div className="flex items-center gap-2 shrink-0">
-            <Sparkles className="w-5 h-5 text-emerald-400" />
-            <span className="text-lg font-bold gradient-text" style={{ fontFamily: 'Syne, sans-serif' }}>
-              OpenBasket
-            </span>
-          </div>
+          <a href="https://remiges.tech" target="_blank" rel="noopener noreferrer" className="shrink-0">
+            <img
+              src="https://remiges.tech/wp-content/uploads/2024/04/Remiges-logo-2048x403.png"
+              alt="Remiges"
+              className="h-7 w-auto rounded"
+              style={{ filter: 'brightness(0) invert(1)', opacity: 0.92 }}
+            />
+          </a>
 
           <form onSubmit={e => { e.preventDefault(); clearTimeout(debounceRef.current); discover(searchQuery); }} className="flex-1 max-w-2xl mx-auto">
             <div className="search-glow relative flex items-center bg-white/[0.06] border border-white/10 rounded-xl transition-all duration-300">
@@ -910,7 +926,7 @@ export default function App() {
               }
               <input
                 type="text" value={searchQuery} onChange={handleSearchChange}
-                placeholder="Search products on the Beckn network…"
+                placeholder="Search products on the ION network…"
                 className="w-full bg-transparent pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none"
               />
               {searchQuery && (
@@ -924,7 +940,8 @@ export default function App() {
 
           <button
             onClick={() => setIsCartOpen(true)}
-            className="relative shrink-0 flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-xl transition-all text-sm font-medium"
+            className="relative shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-medium text-white"
+            style={{ background: 'rgba(0,184,230,0.15)', border: '1px solid rgba(0,184,230,0.3)' }}
           >
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:block">Cart</span>
@@ -937,25 +954,61 @@ export default function App() {
         </div>
       </header>
 
+      {/* ── Category chips + sort ─────────────────────────────────────────── */}
+      {catalog.length > 0 && (
+        <div className="sticky top-16 z-20 bg-[#080d1e]/90 backdrop-blur border-b border-white/[0.05]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+            {/* Scrollable category chips */}
+            <div className="flex gap-2 overflow-x-auto flex-1 scrollbar-none pb-0.5">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap
+                    ${activeCategory === cat
+                      ? 'text-white shadow-sm'
+                      : 'bg-white/[0.06] text-slate-400 hover:text-slate-200 border border-white/[0.08]'
+                    }`}
+                  style={activeCategory === cat ? { background: 'linear-gradient(135deg,#00b8e6,#1e2fa0)', border: 'none' } : {}}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            {/* Sort dropdown */}
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              className="shrink-0 bg-white/[0.06] border border-white/[0.08] text-slate-300 text-xs rounded-xl px-3 py-1.5 outline-none focus:border-white/20 cursor-pointer"
+            >
+              <option value="default">Relevance</option>
+              <option value="price_asc">Price: Low → High</option>
+              <option value="price_desc">Price: High → Low</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-5">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-xs uppercase tracking-widest text-emerald-400 font-semibold mb-1">
-              Beckn Network · ion.id/ion-winroom-0426
+            <p className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: '#00b8e6' }}>
+              Remiges Retail · ION Network
             </p>
             <h1 className="text-3xl sm:text-4xl gradient-text">
-              {searchQuery ? `"${searchQuery}"` : 'Discover Products'}
+              {searchQuery ? `Results for "${searchQuery}"` : activeCategory !== 'All' ? activeCategory : 'Discover Products'}
             </h1>
           </div>
-          {catalog.length > 0 && (
-            <span className="text-sm text-slate-400">{catalog.length} product{catalog.length !== 1 ? 's' : ''} found</span>
+          {visibleCatalog.length > 0 && (
+            <span className="text-sm text-slate-500">{visibleCatalog.length} product{visibleCatalog.length !== 1 ? 's' : ''}</span>
           )}
         </div>
       </div>
 
       {/* ── Catalog ──────────────────────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-40">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-36">
 
         {isSearching && catalog.length === 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -966,26 +1019,36 @@ export default function App() {
         {error && !isSearching && (
           <div className="flex flex-col items-center justify-center py-28 gap-4 text-slate-400">
             <Package className="w-14 h-14 opacity-20" />
-            <p>Could not reach the network.</p>
+            <p className="font-medium">Could not reach the network.</p>
+            <p className="text-sm opacity-60">Check your connection and try again.</p>
             <button onClick={() => discover(searchQuery)}
-              className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 px-5 py-2 rounded-xl text-sm font-medium transition-all">
+              className="mt-1 px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all"
+              style={{ background: 'linear-gradient(135deg,#00b8e6,#1e2fa0)' }}>
               Retry
             </button>
           </div>
         )}
 
-        {!isSearching && !error && catalog.length === 0 && (
+        {!isSearching && !error && visibleCatalog.length === 0 && (
           <div className="flex flex-col items-center justify-center py-28 gap-3 text-slate-400">
-            <Search className="w-14 h-14 opacity-15" />
-            <p>No products found{searchQuery ? ` for "${searchQuery}"` : ''}.</p>
-            <p className="text-sm opacity-60">Try a different search term.</p>
+            <div className="w-20 h-20 rounded-full bg-white/[0.04] flex items-center justify-center mb-2">
+              <Search className="w-9 h-9 opacity-30" />
+            </div>
+            <p className="font-semibold text-slate-300">No products found</p>
+            <p className="text-sm opacity-60">{searchQuery ? `No results for "${searchQuery}"` : 'Try selecting a different category.'}</p>
+            {activeCategory !== 'All' && (
+              <button onClick={() => setActiveCategory('All')}
+                className="mt-2 text-sm font-semibold px-4 py-1.5 rounded-full border border-white/10 text-slate-300 hover:border-white/20 transition-all">
+                Clear filter
+              </button>
+            )}
           </div>
         )}
 
-        {catalog.length > 0 && (
+        {visibleCatalog.length > 0 && (
           <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             <AnimatePresence>
-              {catalog.map((product, i) => {
+              {visibleCatalog.map((product, i) => {
                 const inCart = cart.find(c => c.id === product.id);
                 return (
                   <motion.div
@@ -1003,43 +1066,82 @@ export default function App() {
                         className="w-full h-full object-cover opacity-85 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
                         onError={e => { e.target.src = FALLBACK_IMG; }}
                       />
-                      {/* View detail hint */}
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center">
-                        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-xs font-semibold text-white bg-black/50 backdrop-blur px-3 py-1.5 rounded-full">
-                          View &amp; Select
-                        </span>
-                      </div>
-                      <span className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border border-emerald-500/20">
-                        <Tag className="inline w-2.5 h-2.5 mr-1 -mt-0.5" />
-                        {product.category.length > 20 ? product.category.slice(0, 20) + '…' : product.category}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent" />
+                      {/* Category badge */}
+                      <span className="absolute top-2.5 left-2.5 bg-black/55 backdrop-blur-md text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border border-white/10 text-slate-300">
+                        {product.category.length > 18 ? product.category.slice(0, 18) + '…' : product.category}
                       </span>
+                      {/* COD badge */}
+                      {product.codAvailable && (
+                        <span className="absolute top-2.5 right-2.5 bg-amber-500/90 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full text-white">
+                          COD
+                        </span>
+                      )}
+                      {/* Offer validity */}
+                      {product.offerValidity && (
+                        <span className="absolute bottom-2.5 left-2.5 text-[10px] text-slate-300 bg-black/50 backdrop-blur px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Calendar className="w-2.5 h-2.5" /> Till {product.offerValidity}
+                        </span>
+                      )}
                     </div>
 
                     {/* Body */}
-                    <div className="p-4 flex flex-col flex-grow gap-2">
+                    <div className="p-3.5 flex flex-col flex-grow gap-1.5">
                       <h3 className="text-sm font-semibold leading-snug line-clamp-2">{product.name}</h3>
                       {product.shortDesc && (
                         <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{product.shortDesc}</p>
                       )}
-                      <div className="mt-auto pt-3 flex items-center justify-between gap-2">
-                        <span className="text-lg font-bold">{fmt(product.price, product.currency)}</span>
 
-                        {/* Cart controls — stop propagation so card click doesn't fire */}
+                      {/* Seller + delivery info */}
+                      <div className="flex flex-col gap-1 mt-0.5">
+                        {product.sellerName && (
+                          <p className="text-[11px] text-slate-500 flex items-center gap-1 truncate">
+                            <Store className="w-3 h-3 shrink-0" /> {product.sellerName}
+                          </p>
+                        )}
+                        <div className="flex gap-1.5 flex-wrap">
+                          {product.deliveryRange && (
+                            <span className="text-[10px] text-blue-400 flex items-center gap-0.5">
+                              <MapPin className="w-2.5 h-2.5" />{product.deliveryRange}
+                            </span>
+                          )}
+                          {product.deliveryHours && (
+                            <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
+                              <Clock className="w-2.5 h-2.5" />{product.deliveryHours}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Price + cart controls */}
+                      <div className="mt-auto pt-2.5 flex items-center justify-between gap-2 border-t border-white/[0.05]">
+                        <span className="text-base font-bold">{fmt(product.price, product.currency)}</span>
+
                         {inCart ? (
                           <div
                             onClick={e => e.stopPropagation()}
-                            className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-1 py-1"
+                            className="flex items-center gap-0 rounded-xl overflow-hidden border"
+                            style={{ borderColor: 'rgba(0,184,230,0.3)', background: 'rgba(0,184,230,0.1)' }}
                           >
-                            <button onClick={() => updateQty(product.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-emerald-400 transition-colors"><Minus className="w-3 h-3" /></button>
-                            <span className="w-6 text-center text-sm font-bold text-emerald-400">{inCart.qty}</span>
-                            <button onClick={() => updateQty(product.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-emerald-400 transition-colors"><Plus className="w-3 h-3" /></button>
+                            <button onClick={() => updateQty(product.id, -1)}
+                              className="w-8 h-8 flex items-center justify-center hover:bg-white/10 transition-colors"
+                              style={{ color: '#00b8e6' }}>
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-7 text-center text-sm font-bold" style={{ color: '#00b8e6' }}>{inCart.qty}</span>
+                            <button onClick={() => updateQty(product.id, 1)}
+                              className="w-8 h-8 flex items-center justify-center hover:bg-white/10 transition-colors"
+                              style={{ color: '#00b8e6' }}>
+                              <Plus className="w-3 h-3" />
+                            </button>
                           </div>
                         ) : (
                           <button
                             onClick={e => { e.stopPropagation(); addToCart(product); }}
-                            className="flex items-center gap-1.5 bg-white/[0.08] hover:bg-white/[0.14] border border-white/10 text-slate-200 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+                            className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white transition-all active:scale-95 shadow"
+                            style={{ background: 'linear-gradient(135deg,#00b8e6,#1e2fa0)' }}
                           >
-                            <ShoppingCart className="w-3.5 h-3.5" /> Add
+                            <Plus className="w-3.5 h-3.5" /> ADD
                           </button>
                         )}
                       </div>
@@ -1051,6 +1153,40 @@ export default function App() {
           </motion.div>
         )}
       </main>
+
+      {/* ── Sticky cart footer (Swiggy-style) ────────────────────────────── */}
+      <AnimatePresence>
+        {cart.length > 0 && !isCartOpen && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="fixed bottom-0 inset-x-0 z-30 px-4 pb-4 sm:px-6"
+          >
+            <button
+              onClick={() => { setIsCartOpen(true); setCartCheckout(false); }}
+              className="w-full max-w-lg mx-auto flex items-center justify-between px-5 py-4 rounded-2xl text-white shadow-2xl transition-all active:scale-[0.99]"
+              style={{ background: 'linear-gradient(135deg,#00b8e6 0%,#1e2fa0 100%)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-xs font-bold">
+                  {cartCount}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-medium opacity-80">{cartCount} item{cartCount !== 1 ? 's' : ''} added</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 font-bold">
+                <span>{fmt(cartTotal, 'INR')}</span>
+                <div className="flex items-center gap-1 bg-white/15 px-3 py-1.5 rounded-xl text-sm">
+                  View Cart <ChevronRight className="w-4 h-4" />
+                </div>
+              </div>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Product Detail / Quote Modal ─────────────────────────────────── */}
       <AnimatePresence>
@@ -1111,23 +1247,96 @@ export default function App() {
                         <p className="text-sm">Your cart is empty</p>
                         <p className="text-xs opacity-60">Click any product card to add items</p>
                       </div>
-                    ) : cart.map(item => (
-                      <div key={item.id} className="flex gap-3 items-center p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl">
-                        <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-slate-800">
-                          <img src={item.image} alt={item.name} className="w-full h-full object-cover"
-                            onError={e => { e.target.src = FALLBACK_IMG; }} />
+                    ) : cart.map(item => {
+                      const shortAddr = item.sellerAddress
+                        ? [item.sellerAddress.streetAddress, item.sellerAddress.addressLocality, item.sellerAddress.addressRegion].filter(Boolean).join(', ')
+                        : '';
+                      return (
+                        <div key={item.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden">
+                          {/* Hero image */}
+                          <div className="relative h-36 bg-slate-800/80 overflow-hidden">
+                            <img src={item.image} alt={item.name}
+                              className="w-full h-full object-cover opacity-90"
+                              onError={e => { e.target.src = FALLBACK_IMG; }} />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10" />
+                            <div className="absolute bottom-0 left-0 right-0 px-3 pb-3">
+                              <p className="font-bold text-white text-sm leading-snug">{item.name}</p>
+                              {item.shortDesc && <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">{item.shortDesc}</p>}
+                            </div>
+                          </div>
+
+                          <div className="p-3 space-y-2.5">
+                            {/* Offer name + validity */}
+                            {(item.offerName || item.offerValidity) && (
+                              <div className="flex items-center gap-2 text-[11px]">
+                                {item.offerName && (
+                                  <span className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 px-2 py-0.5 rounded-full font-semibold">
+                                    {item.offerName}
+                                  </span>
+                                )}
+                                {item.offerValidity && (
+                                  <span className="text-slate-500 flex items-center gap-1 ml-auto">
+                                    <Calendar className="w-3 h-3" /> Valid till {item.offerValidity}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Price row */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-lg font-bold text-emerald-300">{fmt(item.price, item.currency)}</span>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors"><Minus className="w-3 h-3" /></button>
+                                <span className="w-7 text-center text-sm font-bold">{item.qty}</span>
+                                <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors"><Plus className="w-3 h-3" /></button>
+                              </div>
+                            </div>
+
+                            {/* Seller */}
+                            {item.sellerName && (
+                              <div className="flex items-start gap-2 text-[11px] text-slate-400">
+                                <Store className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-500" />
+                                <span>
+                                  <span className="font-medium text-slate-300">{item.sellerName}</span>
+                                  {shortAddr && <span className="text-slate-500 ml-1">· {shortAddr}</span>}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Delivery badges */}
+                            {(item.deliveryRange || item.deliveryHours || item.codAvailable || item.returnPolicy?.allowed || item.cancelPolicy?.allowed) && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {item.deliveryRange && (
+                                  <span className="flex items-center gap-1 text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                                    <MapPin className="w-2.5 h-2.5" /> Delivers within {item.deliveryRange}
+                                  </span>
+                                )}
+                                {item.deliveryHours && (
+                                  <span className="flex items-center gap-1 text-[10px] font-semibold bg-white/5 text-slate-400 border border-white/10 px-2 py-0.5 rounded-full">
+                                    <Clock className="w-2.5 h-2.5" /> {item.deliveryHours}
+                                  </span>
+                                )}
+                                {item.codAvailable && (
+                                  <span className="flex items-center gap-1 text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                                    <CreditCard className="w-2.5 h-2.5" /> Cash on Delivery
+                                  </span>
+                                )}
+                                {item.returnPolicy?.allowed && (
+                                  <span className="flex items-center gap-1 text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                                    <RotateCcw className="w-2.5 h-2.5" /> {item.returnPolicy.window?.replace('P','').replace('D',' day')} returns
+                                  </span>
+                                )}
+                                {item.cancelPolicy?.allowed && (
+                                  <span className="flex items-center gap-1 text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-full">
+                                    <X className="w-2.5 h-2.5" /> Free cancellation
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-grow min-w-0">
-                          <p className="text-sm font-medium truncate">{item.name}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{fmt(item.price, item.currency)} × {item.qty} = {fmt(item.price * item.qty, item.currency)}</p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-md bg-white/[0.06] hover:bg-white/10 transition-colors"><Minus className="w-3 h-3" /></button>
-                          <span className="w-6 text-center text-sm font-bold">{item.qty}</span>
-                          <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-md bg-white/[0.06] hover:bg-white/10 transition-colors"><Plus className="w-3 h-3" /></button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {cart.length > 0 && (

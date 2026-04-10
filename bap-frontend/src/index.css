@@ -1,16 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand:       #10b981;
-  --color-brand-dark:  #059669;
+  /* Remiges brand palette */
+  --color-brand:       #00b8e6;
+  --color-brand-dark:  #0099cc;
+  --color-brand-pink:  #e6006e;
+  --color-brand-navy:  #1e2fa0;
   --color-rose:        #f43f5e;
   --color-amber:       #f59e0b;
-  --color-surface:     #0f172a;
-  --color-card:        rgba(255,255,255,0.05);
-  --color-border:      rgba(255,255,255,0.10);
+  --color-surface:     #080d1e;
+  --color-card:        rgba(255,255,255,0.04);
+  --color-border:      rgba(255,255,255,0.09);
   --color-dim:         #94a3b8;
 
-  --font-sans: 'Syne', 'DM Sans', system-ui, sans-serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
 }
 
 /* ── Base ──────────────────────────────────────────────── */
@@ -21,10 +24,10 @@ html { color-scheme: dark; }
 body {
   margin: 0;
   min-height: 100vh;
-  background: #0a0f1e;
+  background: #080d1e;
   background-image:
-    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(16,185,129,0.12) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 80% 100%,  rgba(99,102,241,0.10) 0%, transparent 60%);
+    radial-gradient(ellipse 80% 50% at 15% -5%,  rgba(0,184,230,0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 85% 100%, rgba(230,0,110,0.08) 0%, transparent 60%);
   color: #f1f5f9;
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -54,9 +57,9 @@ h1,h2,h3,h4 {
   border: 1px solid rgba(255,255,255,0.08);
 }
 
-/* ── Gradient text ───────────────────────────────────── */
+/* ── Gradient text (Remiges cyan → navy) ─────────────── */
 .gradient-text {
-  background: linear-gradient(135deg, #10b981 0%, #34d399 50%, #60a5fa 100%);
+  background: linear-gradient(135deg, #00b8e6 0%, #4dd4f5 45%, #a5b4fc 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -80,7 +83,7 @@ h1,h2,h3,h4 {
 
 /* ── Search bar glow on focus ───────────────────────── */
 .search-glow:focus-within {
-  box-shadow: 0 0 0 3px rgba(16,185,129,0.25), 0 20px 40px rgba(0,0,0,0.3);
+  box-shadow: 0 0 0 3px rgba(0,184,230,0.22), 0 20px 40px rgba(0,0,0,0.3);
 }
 
 /* ── Card hover glow ────────────────────────────────── */
@@ -89,7 +92,7 @@ h1,h2,h3,h4 {
 }
 .product-card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 24px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(16,185,129,0.2);
+  box-shadow: 0 24px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,184,230,0.18);
 }
 
 /* ── Pulse dot ───────────────────────────────────────── */
@@ -101,3 +104,7 @@ h1,h2,h3,h4 {
 
 button { cursor: pointer; border: none; background: none; font-family: inherit; }
 img    { max-width: 100%; display: block; }
+
+/* ── Utilities ───────────────────────────────────────── */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
