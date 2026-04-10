@@ -6,6 +6,7 @@ import {
   RotateCcw, CreditCard, ShieldCheck, Clock,
   Star, Info, Receipt, Store, MapPin, Calendar, Zap,
   User, Phone, Home, ChevronLeft, Banknote,
+  Ban, MessageSquare, RefreshCw, ThumbsUp,
 } from 'lucide-react';
 
 // BPP target, network ID, and BAP identity are all server-side config (BAP .env).
@@ -416,7 +417,29 @@ function ProductModal({ product, transaction, onClose, onSelect, onInit, onConfi
 /* ─────────────────────────── CheckoutFlow ──────────────────────────────── */
 // Multi-step checkout inside the cart drawer:
 //   SELECT_SENT → polling → QUOTE_RECEIVED → billing form → INIT_SENT → polling → INIT_RECEIVED → CONFIRM_SENT → CONFIRMED
-function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoading, onInit, onConfirm, onDone }) {
+function StarRating({ value, onChange }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1,2,3,4,5].map(n => (
+        <button key={n}
+          onClick={() => onChange(n)}
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(0)}
+          className="transition-transform hover:scale-110">
+          <Star className={`w-6 h-6 ${n <= (hover || value) ? 'text-amber-400 fill-amber-400' : 'text-slate-600'}`} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoading, onInit, onConfirm, onDone, onCancel, onRate, onSupport, onRequestStatus }) {
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [showRatingForm, setShowRatingForm] = useState(false);
+  const [showSupportForm, setShowSupportForm] = useState(false);
+  const [supportDesc, setSupportDesc] = useState('');
   const status = transaction?.status;
 
   // Parse BPP-confirmed quote from on_select
@@ -433,12 +456,17 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
   /* ── Stepper ───────────────────────────────────────────────────────── */
   const STEPS = ['Quote', 'Billing', 'Confirm', 'Done'];
   const stepIndex = {
-    SELECT_SENT:   0,
+    SELECT_SENT:    0,
     QUOTE_RECEIVED: 1,
-    INIT_SENT:     1,
-    INIT_RECEIVED: 2,
-    CONFIRM_SENT:  2,
-    CONFIRMED:     3,
+    INIT_SENT:      1,
+    INIT_RECEIVED:  2,
+    CONFIRM_SENT:   2,
+    CONFIRMED:      3,
+    STATUS_SENT:    3,
+    CANCEL_SENT:    3,
+    CANCELLED:      3,
+    RATE_SENT:      3,
+    SUPPORT_SENT:   3,
   }[status] ?? 0;
 
   return (
@@ -670,25 +698,138 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
           </div>
         )}
 
-        {/* ── Step: Confirmed ────────────────────────────────────────── */}
+        {/* ── Step: Status requested ─────────────────────────────────── */}
+        {status === 'STATUS_SENT' && (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 rounded-full border-2 border-blue-500/20 border-t-blue-400 animate-spin" />
+              <RefreshCw className="absolute inset-0 m-auto w-5 h-5 text-blue-400" />
+            </div>
+            <p className="text-sm text-slate-300">Fetching latest order status…</p>
+          </div>
+        )}
+
+        {/* ── Step: Confirmed — Order Detail card ─────────────────── */}
         {status === 'CONFIRMED' && (
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="w-18 h-18 w-16 h-16 rounded-full bg-emerald-500/15 border-2 border-emerald-500/40 flex items-center justify-center">
-              <CheckCircle2 className="w-9 h-9 text-emerald-400" />
-            </div>
-            <div>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="space-y-4">
+            {/* Success banner */}
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/15 border-2 border-emerald-500/40 flex items-center justify-center">
+                <CheckCircle2 className="w-9 h-9 text-emerald-400" />
+              </div>
               <p className="font-bold text-emerald-300 text-xl">Order Placed!</p>
-              <p className="text-sm text-slate-400 mt-1">Your order has been confirmed on the ION network.</p>
+              <p className="text-xs text-slate-400">Confirmed on the ION network</p>
             </div>
-            <div className="w-full mt-1 text-xs text-slate-500 bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-2.5 text-left space-y-1">
-              <p><span className="text-slate-400">Transaction:</span> {transaction.id}</p>
+
+            {/* Order info */}
+            <div className="text-xs text-slate-500 bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-2.5 space-y-1">
+              <p><span className="text-slate-400">Order ID:</span> <span className="font-mono text-slate-300 break-all">{transaction.id}</span></p>
               {billing.name && <p><span className="text-slate-400">Ordered by:</span> {billing.name}</p>}
+              {billing.phone && <p><span className="text-slate-400">Phone:</span> {billing.phone}</p>}
             </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={onRequestStatus}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/20 hover:bg-blue-500/20 transition-all">
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh Status
+              </button>
+              <button onClick={onCancel} disabled={isLoading}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/20 hover:bg-rose-500/20 transition-all disabled:opacity-50">
+                <Ban className="w-3.5 h-3.5" /> Cancel Order
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => { setShowRatingForm(v => !v); setShowSupportForm(false); }}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-all">
+                <Star className="w-3.5 h-3.5" /> Rate Order
+              </button>
+              <button onClick={() => { setShowSupportForm(v => !v); setShowRatingForm(false); }}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20 hover:bg-purple-500/20 transition-all">
+                <MessageSquare className="w-3.5 h-3.5" /> Get Support
+              </button>
+            </div>
+
+            {/* Inline rating form */}
+            <AnimatePresence>
+              {showRatingForm && !transaction.rated && (
+                <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                  className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-3">
+                  <p className="text-xs font-semibold text-amber-300">How was your experience?</p>
+                  <StarRating value={ratingValue} onChange={setRatingValue} />
+                  <textarea
+                    value={ratingFeedback} onChange={e => setRatingFeedback(e.target.value)}
+                    placeholder="Optional feedback…"
+                    rows={2}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 outline-none resize-none"
+                  />
+                  <button
+                    disabled={!ratingValue || isLoading}
+                    onClick={() => { onRate(ratingValue, ratingFeedback); setShowRatingForm(false); }}
+                    className="w-full py-2 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-white disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
+                    {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><ThumbsUp className="w-3.5 h-3.5" /> Submit Rating</>}
+                  </button>
+                </motion.div>
+              )}
+              {transaction.rated && (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2.5 text-xs text-emerald-300 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Rated {transaction.rated}/5 — thank you!
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Inline support form */}
+            <AnimatePresence>
+              {showSupportForm && (
+                <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                  className="rounded-xl border border-purple-500/20 bg-purple-500/5 px-4 py-3 space-y-3">
+                  <p className="text-xs font-semibold text-purple-300">Describe your issue</p>
+                  <textarea
+                    value={supportDesc} onChange={e => setSupportDesc(e.target.value)}
+                    placeholder="What do you need help with?"
+                    rows={3}
+                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 outline-none resize-none"
+                  />
+                  <button
+                    disabled={!supportDesc.trim() || isLoading}
+                    onClick={() => { onSupport(supportDesc); setSupportDesc(''); setShowSupportForm(false); }}
+                    className="w-full py-2 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
+                    {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><MessageSquare className="w-3.5 h-3.5" /> Submit Request</>}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <button onClick={onDone}
-              className="w-full mt-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30">
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30">
               <Sparkles className="w-4 h-4" /> Continue Shopping
             </button>
+          </motion.div>
+        )}
+
+        {/* ── Step: Cancel sent / Cancelled ──────────────────────────── */}
+        {(status === 'CANCEL_SENT' || status === 'CANCELLED') && (
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="flex flex-col items-center gap-3 py-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-rose-500/15 border-2 border-rose-500/40 flex items-center justify-center">
+              {status === 'CANCEL_SENT'
+                ? <Loader2 className="w-9 h-9 text-rose-400 animate-spin" />
+                : <Ban className="w-9 h-9 text-rose-400" />}
+            </div>
+            <p className="font-bold text-rose-300 text-lg">
+              {status === 'CANCEL_SENT' ? 'Cancelling…' : 'Order Cancelled'}
+            </p>
+            <p className="text-xs text-slate-400">
+              {status === 'CANCEL_SENT' ? 'Waiting for the seller to confirm cancellation.' : 'Your order has been cancelled.'}
+            </p>
+            {status === 'CANCELLED' && (
+              <button onClick={onDone}
+                className="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all">
+                <Sparkles className="w-4 h-4" /> Back to Shopping
+              </button>
+            )}
           </motion.div>
         )}
       </div>
@@ -787,7 +928,8 @@ export default function App() {
 
   /* ── Transaction polling ─────────────────────────────────────────────── */
   useEffect(() => {
-    if (!transaction || ['CONFIRMED', 'CANCELLED'].includes(transaction.status)) return;
+    const terminalStatuses = ['CONFIRMED', 'CANCELLED'];
+    if (!transaction || terminalStatuses.includes(transaction.status)) return;
     const id = setInterval(() => {
       fetch(`${API_BASE}/status/${transaction.id}`)
         .then(r => r.json())
@@ -890,6 +1032,75 @@ export default function App() {
       });
       setTransaction(p => ({ ...p, status: 'CONFIRM_SENT' }));
     } catch (e) { alert('Confirm failed: ' + e.message); }
+    finally { setIsLoading(false); }
+  };
+
+  /* ── Beckn: Request Status ───────────────────────────────────────────── */
+  const handleRequestStatus = async () => {
+    if (!transaction) return;
+    try {
+      await fetch(`${API_BASE}/request-status`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction_id: transaction.id }),
+      });
+      setTransaction(p => ({ ...p, status: 'STATUS_SENT' }));
+    } catch (e) { alert('Status request failed: ' + e.message); }
+  };
+
+  /* ── Beckn: Cancel ───────────────────────────────────────────────────── */
+  const handleCancel = async () => {
+    if (!transaction) return;
+    if (!window.confirm('Cancel this order?')) return;
+    setIsLoading(true);
+    try {
+      await fetch(`${API_BASE}/cancel`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction_id: transaction.id }),
+      });
+      setTransaction(p => ({ ...p, status: 'CANCEL_SENT' }));
+    } catch (e) { alert('Cancel failed: ' + e.message); }
+    finally { setIsLoading(false); }
+  };
+
+  /* ── Beckn: Rate ─────────────────────────────────────────────────────── */
+  const handleRate = async (rating, feedback) => {
+    if (!transaction) return;
+    setIsLoading(true);
+    try {
+      await fetch(`${API_BASE}/rate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_id: transaction.id,
+          ratingInputs: [{
+            id: transaction.id,
+            ratingCategory: 'order',
+            range: { min: 1, max: 5, value: rating },
+            feedbackFormSubmission: feedback ? { data: { comment: feedback } } : null,
+          }],
+        }),
+      });
+      setTransaction(p => ({ ...p, rated: rating }));
+    } catch (e) { alert('Rating failed: ' + e.message); }
+    finally { setIsLoading(false); }
+  };
+
+  /* ── Beckn: Support ──────────────────────────────────────────────────── */
+  const handleSupport = async (description) => {
+    if (!transaction) return;
+    setIsLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/support`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_id: transaction.id,
+          orderId: transaction.id,
+          description,
+        }),
+      });
+      const d = await r.json();
+      setTransaction(p => ({ ...p, supportTicketStatus: d.status || 'SUPPORT_SENT' }));
+      alert('Support ticket created! The seller will get back to you.');
+    } catch (e) { alert('Support request failed: ' + e.message); }
     finally { setIsLoading(false); }
   };
 
@@ -1364,6 +1575,10 @@ export default function App() {
                   onInit={handleInit}
                   onConfirm={handleConfirm}
                   onDone={resetCart}
+                  onCancel={handleCancel}
+                  onRate={handleRate}
+                  onSupport={handleSupport}
+                  onRequestStatus={handleRequestStatus}
                 />
               )}
             </motion.aside>

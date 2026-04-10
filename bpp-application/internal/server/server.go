@@ -8,12 +8,17 @@ import (
 	"github.com/remiges-tech/alya/service"
 	"github.com/remiges-tech/alya/wscutils"
 
+	"github.com/ion/winroom/bpp/internal/cancelsvc"
 	"github.com/ion/winroom/bpp/internal/catalog"
 	"github.com/ion/winroom/bpp/internal/config"
 	"github.com/ion/winroom/bpp/internal/confirmsvc"
 	"github.com/ion/winroom/bpp/internal/dashboardsvc"
 	"github.com/ion/winroom/bpp/internal/initsvc"
+	"github.com/ion/winroom/bpp/internal/ratesvc"
 	"github.com/ion/winroom/bpp/internal/selectsvc"
+	"github.com/ion/winroom/bpp/internal/statussvc"
+	"github.com/ion/winroom/bpp/internal/supportsvc"
+	"github.com/ion/winroom/bpp/internal/updatesvc"
 )
 
 // RegisterRoutes wires all inbound BPP endpoints to the Alya service.
@@ -54,8 +59,8 @@ func RegisterRoutes(svc *service.Service, cfg *config.Config) {
 
 	webhook := svc.Router.Group("/api/webhook")
 	registerTransactionRoutes(svc, webhook, pool, cfg)
-	registerFulfillmentRoutes(svc, webhook)
-	registerPostFulfillmentRoutes(svc, webhook)
+	registerFulfillmentRoutes(svc, webhook, pool, cfg)
+	registerPostFulfillmentRoutes(svc, webhook, pool, cfg)
 	registerBecknCatalogRoutes(svc, webhook)
 }
 
@@ -85,30 +90,20 @@ func registerTransactionRoutes(svc *service.Service, g *gin.RouterGroup, pool *p
 // Fulfillment — status / track / update / cancel
 // ---------------------------------------------------------------------------
 
-func registerFulfillmentRoutes(svc *service.Service, g *gin.RouterGroup) {
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/status", handleStatus)
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/track", handleTrack)
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/update", handleUpdate)
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/cancel", handleCancel)
-}
+func registerFulfillmentRoutes(svc *service.Service, g *gin.RouterGroup, pool *pgxpool.Pool, cfg *config.Config) {
+	statusH := statussvc.NewHandler(pool, cfg, svc.LogHarbour)
+	g.POST("/status", statusH.Handle)
 
-func handleStatus(c *gin.Context, svc *service.Service) {
-	// TODO: fetch contract state, fire async on_status callback to BAP
-	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
+	updateH := updatesvc.NewHandler(pool, cfg, svc.LogHarbour)
+	g.POST("/update", updateH.Handle)
+
+	cancelH := cancelsvc.NewHandler(pool, cfg, svc.LogHarbour)
+	g.POST("/cancel", cancelH.Handle)
+
+	svc.RegisterRouteWithGroup(g, http.MethodPost, "/track", handleTrack)
 }
 
 func handleTrack(c *gin.Context, svc *service.Service) {
-	// TODO: return tracking URL/handle, fire async on_track callback to BAP
-	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
-}
-
-func handleUpdate(c *gin.Context, svc *service.Service) {
-	// TODO: mutate contract, fire async on_update callback to BAP
-	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
-}
-
-func handleCancel(c *gin.Context, svc *service.Service) {
-	// TODO: cancel contract, fire async on_cancel callback to BAP
 	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
 }
 
@@ -116,19 +111,12 @@ func handleCancel(c *gin.Context, svc *service.Service) {
 // Post-fulfillment — rate / support
 // ---------------------------------------------------------------------------
 
-func registerPostFulfillmentRoutes(svc *service.Service, g *gin.RouterGroup) {
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/rate", handleRate)
-	svc.RegisterRouteWithGroup(g, http.MethodPost, "/support", handleSupport)
-}
+func registerPostFulfillmentRoutes(svc *service.Service, g *gin.RouterGroup, pool *pgxpool.Pool, cfg *config.Config) {
+	rateH := ratesvc.NewHandler(pool, cfg, svc.LogHarbour)
+	g.POST("/rate", rateH.Handle)
 
-func handleRate(c *gin.Context, svc *service.Service) {
-	// TODO: record rating, fire async on_rate callback to BAP
-	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
-}
-
-func handleSupport(c *gin.Context, svc *service.Service) {
-	// TODO: create support ticket, fire async on_support callback to BAP
-	c.JSON(http.StatusOK, wscutils.NewSuccessResponse(nil))
+	supportH := supportsvc.NewHandler(pool, cfg, svc.LogHarbour)
+	g.POST("/support", supportH.Handle)
 }
 
 // ---------------------------------------------------------------------------
@@ -167,8 +155,11 @@ func registerDashboardRoutes(v1 *gin.RouterGroup, pool *pgxpool.Pool, cfg *confi
 	inv := v1.Group("/inventory")
 	inv.GET("/resources", h.HandleListResources)
 	inv.GET("/offers", h.HandleListOffers)
+	inv.GET("/stock", h.HandleListStock)
 
 	v1.GET("/messages", h.HandleListMessages)
+	v1.GET("/support-tickets", h.HandleListSupportTickets)
+	v1.GET("/ratings", h.HandleListRatings)
 }
 
 func registerBecknCatalogRoutes(svc *service.Service, g *gin.RouterGroup) {

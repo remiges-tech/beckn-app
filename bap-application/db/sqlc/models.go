@@ -168,6 +168,11 @@ const (
 	TransactionStatusCONFIRMED     TransactionStatus = "CONFIRMED"
 	TransactionStatusCANCELLED     TransactionStatus = "CANCELLED"
 	TransactionStatusCOMPLETE      TransactionStatus = "COMPLETE"
+	TransactionStatusSTATUSSENT    TransactionStatus = "STATUS_SENT"
+	TransactionStatusCANCELSENT    TransactionStatus = "CANCEL_SENT"
+	TransactionStatusUPDATESENT    TransactionStatus = "UPDATE_SENT"
+	TransactionStatusRATESENT      TransactionStatus = "RATE_SENT"
+	TransactionStatusSUPPORTSENT   TransactionStatus = "SUPPORT_SENT"
 )
 
 func (e *TransactionStatus) Scan(src interface{}) error {

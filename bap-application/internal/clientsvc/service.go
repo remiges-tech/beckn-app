@@ -569,6 +569,206 @@ func (s *ClientService) Confirm(ctx context.Context, req *ClientConfirmRequest) 
 	})
 }
 
+// RequestStatus sends a Beckn status request for an active transaction.
+func (s *ClientService) RequestStatus(ctx context.Context, req *ClientRequestStatusRequest) error {
+	txnID, _ := uuid.Parse(req.TransactionID)
+	msgID := uuid.New()
+	q := dbsqlc.New(s.pool)
+
+	txn, err := q.GetTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("transaction %s not found: %w", req.TransactionID, err)
+	}
+	bppID, bppURI := s.resolveBPP(txn)
+
+	snapshot, err := q.GetLatestContractSnapshot(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("no snapshot for txn %s: %w", txnID, err)
+	}
+
+	var contract map[string]interface{}
+	if err := json.Unmarshal(snapshot.Contract, &contract); err != nil {
+		return fmt.Errorf("parse contract snapshot: %w", err)
+	}
+	contractID, _ := contract["id"].(string)
+
+	msgJSON, _ := json.Marshal(map[string]interface{}{
+		"contract": map[string]string{"id": contractID},
+	})
+	becknReq := BecknRequest{
+		Context: s.newContext("status", req.TransactionID, msgID.String(), bppID, bppURI),
+		Message: json.RawMessage(msgJSON),
+	}
+	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "status", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+		return err
+	}
+	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
+		TransactionID: txnID,
+		BapID:         s.cfg.BapID,
+		NetworkID:     &s.cfg.NetworkID,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
+		Status:        dbsqlc.TransactionStatusSTATUSSENT,
+	})
+}
+
+// Cancel sends a Beckn cancel request for an active transaction.
+func (s *ClientService) Cancel(ctx context.Context, req *ClientCancelRequest) error {
+	txnID, _ := uuid.Parse(req.TransactionID)
+	msgID := uuid.New()
+	q := dbsqlc.New(s.pool)
+
+	txn, err := q.GetTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("transaction %s not found: %w", req.TransactionID, err)
+	}
+	bppID, bppURI := s.resolveBPP(txn)
+
+	snapshot, err := q.GetLatestContractSnapshot(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("no snapshot for txn %s: %w", txnID, err)
+	}
+
+	var contract map[string]interface{}
+	if err := json.Unmarshal(snapshot.Contract, &contract); err != nil {
+		return fmt.Errorf("parse contract snapshot: %w", err)
+	}
+	contractID, _ := contract["id"].(string)
+
+	msgJSON, _ := json.Marshal(map[string]interface{}{
+		"contract": map[string]string{"id": contractID},
+	})
+	becknReq := BecknRequest{
+		Context: s.newContext("cancel", req.TransactionID, msgID.String(), bppID, bppURI),
+		Message: json.RawMessage(msgJSON),
+	}
+	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "cancel", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+		return err
+	}
+	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
+		TransactionID: txnID,
+		BapID:         s.cfg.BapID,
+		NetworkID:     &s.cfg.NetworkID,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
+		Status:        dbsqlc.TransactionStatusCANCELSENT,
+	})
+}
+
+// Update sends a Beckn update request with partial contract changes.
+func (s *ClientService) Update(ctx context.Context, req *ClientUpdateRequest) error {
+	txnID, _ := uuid.Parse(req.TransactionID)
+	msgID := uuid.New()
+	q := dbsqlc.New(s.pool)
+
+	txn, err := q.GetTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("transaction %s not found: %w", req.TransactionID, err)
+	}
+	bppID, bppURI := s.resolveBPP(txn)
+
+	msgJSON, _ := json.Marshal(map[string]interface{}{"contract": req.Contract})
+	becknReq := BecknRequest{
+		Context: s.newContext("update", req.TransactionID, msgID.String(), bppID, bppURI),
+		Message: json.RawMessage(msgJSON),
+	}
+	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "update", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+		return err
+	}
+	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
+		TransactionID: txnID,
+		BapID:         s.cfg.BapID,
+		NetworkID:     &s.cfg.NetworkID,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
+		Status:        dbsqlc.TransactionStatusUPDATESENT,
+	})
+}
+
+// Rate sends a Beckn rate request with the provided rating inputs.
+func (s *ClientService) Rate(ctx context.Context, req *ClientRateRequest) error {
+	txnID, _ := uuid.Parse(req.TransactionID)
+	msgID := uuid.New()
+	q := dbsqlc.New(s.pool)
+
+	txn, err := q.GetTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("transaction %s not found: %w", req.TransactionID, err)
+	}
+	bppID, bppURI := s.resolveBPP(txn)
+
+	msgJSON, _ := json.Marshal(map[string]interface{}{"ratingInputs": req.RatingInputs})
+	becknReq := BecknRequest{
+		Context: s.newContext("rate", req.TransactionID, msgID.String(), bppID, bppURI),
+		Message: json.RawMessage(msgJSON),
+	}
+	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "rate", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+		return err
+	}
+	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
+		TransactionID: txnID,
+		BapID:         s.cfg.BapID,
+		NetworkID:     &s.cfg.NetworkID,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
+		Status:        dbsqlc.TransactionStatusRATESENT,
+	})
+}
+
+// Support sends a Beckn support request.
+func (s *ClientService) Support(ctx context.Context, req *ClientSupportRequest) error {
+	txnID, _ := uuid.Parse(req.TransactionID)
+	msgID := uuid.New()
+	q := dbsqlc.New(s.pool)
+
+	txn, err := q.GetTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("transaction %s not found: %w", req.TransactionID, err)
+	}
+	bppID, bppURI := s.resolveBPP(txn)
+
+	orderID := req.OrderID
+	if orderID == "" {
+		orderID = req.TransactionID
+	}
+	msgJSON, _ := json.Marshal(map[string]interface{}{
+		"support": map[string]interface{}{
+			"orderId": orderID,
+			"descriptor": map[string]string{
+				"shortDesc": req.Description,
+			},
+		},
+	})
+	becknReq := BecknRequest{
+		Context: s.newContext("support", req.TransactionID, msgID.String(), bppID, bppURI),
+		Message: json.RawMessage(msgJSON),
+	}
+	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "support", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+		return err
+	}
+	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
+		TransactionID: txnID,
+		BapID:         s.cfg.BapID,
+		NetworkID:     &s.cfg.NetworkID,
+		BppID:         &bppID,
+		BppUri:        &bppURI,
+		Status:        dbsqlc.TransactionStatusSUPPORTSENT,
+	})
+}
+
+// resolveBPP returns the BPP ID and URI for a transaction, falling back to server config.
+func (s *ClientService) resolveBPP(txn dbsqlc.Transaction) (bppID, bppURI string) {
+	bppID = s.cfg.BppID
+	bppURI = s.cfg.BppURI
+	if txn.BppID != nil && *txn.BppID != "" {
+		bppID = *txn.BppID
+	}
+	if txn.BppUri != nil && *txn.BppUri != "" {
+		bppURI = *txn.BppUri
+	}
+	return
+}
+
 // GetStatus returns the latest state for a transaction.
 func (s *ClientService) GetStatus(ctx context.Context, txnIDStr string) (*ClientStatusResponse, error) {
 	txnID, err := uuid.Parse(txnIDStr)

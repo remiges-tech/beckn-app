@@ -85,6 +85,9 @@ func (s *ConfirmService) ProcessConfirm(ctx context.Context, req *ConfirmRequest
 		return
 	}
 
+	// Decrement inventory stock for every resource committed in this order.
+	s.decrementStock(ctx, req)
+
 	// Build the on_confirm payload — echo the contract back with ACTIVE status and the contract id.
 	outboundMsgID := uuid.New()
 	confirmedContract := req.Message.Contract
@@ -110,6 +113,38 @@ func (s *ConfirmService) ProcessConfirm(ctx context.Context, req *ConfirmRequest
 
 	// POST on_confirm to BAP and log OUTBOUND.
 	s.callOnConfirm(ctx, txID, outboundMsgID, req.Context.BapURI, onConfirmReq)
+}
+
+// decrementStock reduces the on-hand stock by 1 for every resource referenced
+// in the confirmed order's commitments. Both direct resource lists and offer
+// resource-ID lists are handled. Errors are logged but never fatal — a stock
+// bookkeeping failure must not block the order confirmation.
+func (s *ConfirmService) decrementStock(ctx context.Context, req *ConfirmRequest) {
+	q := dbsqlc.New(s.pool)
+	bppID := s.cfg.BppID
+
+	seen := map[string]struct{}{}
+	for _, c := range req.Message.Contract.Commitments {
+		for _, r := range c.Resources {
+			seen[r.ID] = struct{}{}
+		}
+		if c.Offer != nil {
+			for _, rid := range c.Offer.ResourceIDs {
+				seen[rid] = struct{}{}
+			}
+		}
+	}
+
+	for resourceID := range seen {
+		if err := q.DecrementResourceStock(ctx, dbsqlc.DecrementResourceStockParams{
+			ResourceID: resourceID,
+			BppID:      bppID,
+		}); err != nil {
+			s.lh.WithModule("confirmsvc").Warn().Error(err).Log("stock decrement failed for resource " + resourceID)
+		} else {
+			log.Printf("[stock] decremented stock for resource=%s bpp=%s", resourceID, bppID)
+		}
+	}
 }
 
 // confirmContract transitions the DRAFT contract to ACTIVE.

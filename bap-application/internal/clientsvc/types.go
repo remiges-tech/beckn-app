@@ -79,3 +79,41 @@ type BecknContext struct {
 type ClientDiscoverRequest struct {
 	TextSearch string // maps to intent.textSearch in the outbound Beckn request
 }
+
+// ClientCancelRequest — frontend initiates Cancel.
+type ClientCancelRequest struct {
+	TransactionID string `json:"transaction_id" binding:"required"`
+}
+
+// ClientRequestStatusRequest — frontend triggers a Beckn status request.
+type ClientRequestStatusRequest struct {
+	TransactionID string `json:"transaction_id" binding:"required"`
+}
+
+// ClientUpdateRequest — frontend triggers a Beckn update with partial contract changes.
+type ClientUpdateRequest struct {
+	TransactionID string          `json:"transaction_id" binding:"required"`
+	Contract      json.RawMessage `json:"contract" binding:"required"`
+}
+
+// RatingInput mirrors the Beckn ratingInput shape.
+type RatingInput struct {
+	ID                    string          `json:"id" binding:"required"`
+	RatingCategory        string          `json:"ratingCategory,omitempty"`
+	Descriptor            json.RawMessage `json:"descriptor,omitempty"`
+	Range                 json.RawMessage `json:"range" binding:"required"`
+	FeedbackFormSubmission json.RawMessage `json:"feedbackFormSubmission,omitempty"`
+}
+
+// ClientRateRequest — frontend submits ratings.
+type ClientRateRequest struct {
+	TransactionID string        `json:"transaction_id" binding:"required"`
+	RatingInputs  []RatingInput `json:"ratingInputs" binding:"required"`
+}
+
+// ClientSupportRequest — frontend raises a support request.
+type ClientSupportRequest struct {
+	TransactionID string `json:"transaction_id" binding:"required"`
+	OrderID       string `json:"orderId,omitempty"`
+	Description   string `json:"description,omitempty"`
+}

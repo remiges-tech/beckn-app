@@ -46,6 +46,7 @@ type Catalog struct {
 	Provider          Provider           `json:"provider"`
 	Resources         []Resource         `json:"resources,omitempty"`
 	Offers            []Offer            `json:"offers,omitempty"`
+	Validity          *TimePeriod        `json:"validity,omitempty"`
 	PublishDirectives *PublishDirectives `json:"publishDirectives,omitempty"`
 }
 
@@ -91,6 +92,9 @@ type Resource struct {
 	ID                 string          `json:"id"`
 	Descriptor         Descriptor      `json:"descriptor"`
 	ResourceAttributes json.RawMessage `json:"resourceAttributes,omitempty"`
+	// StockQuantity is the initial on-hand stock set by the provider at publish time.
+	// Zero means untracked (backwards-compatible with existing payloads).
+	StockQuantity int32 `json:"stockQuantity,omitempty"`
 }
 
 type Offer struct {

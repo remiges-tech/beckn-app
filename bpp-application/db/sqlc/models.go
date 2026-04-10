@@ -949,6 +949,15 @@ type Resource struct {
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
+// Per-resource inventory counter. quantity = remaining stock; sold = cumulative confirmed units.
+type ResourceStock struct {
+	ResourceID string             `json:"resource_id"`
+	BppID      string             `json:"bpp_id"`
+	Quantity   int32              `json:"quantity"`
+	Sold       int32              `json:"sold"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Discharge records for consideration agreed in a Contract. Carries payment gateway references or other proof of value transfer.
 type Settlement struct {
 	ID                          string             `json:"id"`

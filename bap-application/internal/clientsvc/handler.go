@@ -111,6 +111,81 @@ func (h *ClientHandler) HandleDiscover(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", resp)
 }
 
+// HandleRequestStatus triggers a Beckn status request (distinct from the local GET /status/:id poll).
+func (h *ClientHandler) HandleRequestStatus(c *gin.Context) {
+	var req ClientRequestStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.RequestStatus(c.Request.Context(), &req); err != nil {
+		h.lh.WithModule("client_handler").Err().Error(err).Log("status request failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "STATUS_SENT"})
+}
+
+// HandleCancel triggers a Beckn cancel request.
+func (h *ClientHandler) HandleCancel(c *gin.Context) {
+	var req ClientCancelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.Cancel(c.Request.Context(), &req); err != nil {
+		h.lh.WithModule("client_handler").Err().Error(err).Log("cancel failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "CANCEL_SENT"})
+}
+
+// HandleUpdate triggers a Beckn update request.
+func (h *ClientHandler) HandleUpdate(c *gin.Context) {
+	var req ClientUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.Update(c.Request.Context(), &req); err != nil {
+		h.lh.WithModule("client_handler").Err().Error(err).Log("update failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "UPDATE_SENT"})
+}
+
+// HandleRate submits ratings for a completed order.
+func (h *ClientHandler) HandleRate(c *gin.Context) {
+	var req ClientRateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.Rate(c.Request.Context(), &req); err != nil {
+		h.lh.WithModule("client_handler").Err().Error(err).Log("rate failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "RATE_SENT"})
+}
+
+// HandleSupport raises a support request for an order.
+func (h *ClientHandler) HandleSupport(c *gin.Context) {
+	var req ClientSupportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.Support(c.Request.Context(), &req); err != nil {
+		h.lh.WithModule("client_handler").Err().Error(err).Log("support failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "SUPPORT_SENT"})
+}
+
 // HandleCatalog returns the food retail catalog.
 func (h *ClientHandler) HandleCatalog(c *gin.Context) {
 	catalog, err := h.svc.GetCatalog(c.Request.Context())

@@ -6,7 +6,7 @@ import {
   RefreshCw, X, ChevronLeft, ChevronRight as ChevronRightIcon,
   Upload, Plus, Trash2, Eye, ArrowUpRight, Filter, Search,
   Activity, Zap, Store, Calendar, Tag, BarChart2, Inbox,
-  ArrowRight, Circle,
+  ArrowRight, Circle, Star, Ticket, Ban,
 } from 'lucide-react'
 
 const API_BASE = '/api/v1'
@@ -136,6 +136,8 @@ const NAV_ITEMS = [
   { id: 'inventory', label: 'Inventory',        icon: Package,         desc: 'Resources & offers' },
   { id: 'publish',   label: 'Publish Catalog',  icon: Radio,           desc: 'Push to network' },
   { id: 'messages',  label: 'Message Log',      icon: MessageSquare,   desc: 'Protocol audit' },
+  { id: 'support',   label: 'Support Tickets',  icon: Ticket,          desc: 'Customer support' },
+  { id: 'ratings',   label: 'Ratings',          icon: Star,            desc: 'Order ratings' },
 ]
 
 function Sidebar({ active, onNav }) {
@@ -328,6 +330,10 @@ function ActivityRow({ o, onView }) {
 function OverviewPage({ onNav }) {
   const { data: stats, loading: sLoad, error: sErr, reload } = useApi('/dashboard/stats')
   const { data: orders } = useApi('/orders?limit=6')
+  const { data: supportData } = useApi('/support-tickets?page=1&limit=1')
+  const { data: ratingsData  } = useApi('/ratings?page=1&limit=1')
+  const totalTickets = supportData?.total ?? null
+  const totalRatings = ratingsData?.total  ?? null
 
   return (
     <div>
@@ -346,13 +352,40 @@ function OverviewPage({ onNav }) {
 
       {sErr && <div className="mb-4"><ErrorBox message={sErr} onRetry={reload} /></div>}
 
+      {/* Stock alerts */}
+      {!sLoad && (stats?.out_of_stock > 0 || stats?.low_stock > 0) && (
+        <div className="mb-5 flex flex-wrap gap-3">
+          {stats?.out_of_stock > 0 && (
+            <button onClick={() => onNav('inventory', { initialTab: 'stock' })}
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all hover:opacity-90"
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
+              <AlertCircle size={14} />
+              {stats.out_of_stock} resource{stats.out_of_stock !== 1 ? 's' : ''} out of stock — view stock
+            </button>
+          )}
+          {stats?.low_stock > 0 && (
+            <button onClick={() => onNav('inventory', { initialTab: 'stock' })}
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all hover:opacity-90"
+              style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }}>
+              <AlertCircle size={14} />
+              {stats.low_stock} resource{stats.low_stock !== 1 ? 's' : ''} running low — view stock
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Stat cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
         <StatCard label="Active Orders"  value={stats?.active_orders}  icon={CheckCircle2} gradient="linear-gradient(135deg,#10b981,#059669)" loading={sLoad} onClick={() => onNav('orders')} />
         <StatCard label="Pending Orders" value={stats?.pending_orders} icon={Clock}        gradient="linear-gradient(135deg,#f59e0b,#d97706)" loading={sLoad} onClick={() => onNav('orders')} />
         <StatCard label="Orders Today"   value={stats?.today_orders}   icon={TrendingUp}   gradient="linear-gradient(135deg,#00b8e6,#1e2fa0)" loading={sLoad} onClick={() => onNav('orders')} />
         <StatCard label="Resources"      value={stats?.resource_count} icon={Package}      gradient="linear-gradient(135deg,#06b6d4,#0891b2)" loading={sLoad} onClick={() => onNav('inventory', { initialTab: 'resources' })} />
+      </div>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard label="Active Offers"  value={stats?.offer_count}    icon={Tag}          gradient="linear-gradient(135deg,#e6006e,#7c3aed)" loading={sLoad} onClick={() => onNav('inventory', { initialTab: 'offers' })} />
+        <StatCard label="Out of Stock"   value={stats?.out_of_stock ?? 0} icon={Ban}       gradient="linear-gradient(135deg,#ef4444,#b91c1c)" loading={sLoad} onClick={() => onNav('inventory', { initialTab: 'stock' })} />
+        <StatCard label="Support Tickets" value={totalTickets}         icon={Ticket}       gradient="linear-gradient(135deg,#8b5cf6,#6d28d9)" loading={totalTickets === null} onClick={() => onNav('support')} />
+        <StatCard label="Ratings"        value={totalRatings}          icon={Star}         gradient="linear-gradient(135deg,#f59e0b,#b45309)" loading={totalRatings === null} onClick={() => onNav('ratings')} />
       </div>
 
       {/* Bottom section */}
@@ -494,6 +527,9 @@ function OrderDetailDrawer({ order, onClose }) {
                       </div>
                     </section>
                   )}
+
+                  {/* Ratings */}
+                  {data?.contract?.id && <OrderRatings contractId={data.contract.id} />}
                 </>
               )}
             </div>
@@ -588,7 +624,12 @@ function ResourcesTab() {
   const [page, setPage] = useState(1)
   const limit = 20
   const { data, loading, error, reload } = useApi(`/inventory/resources?page=${page}&limit=${limit}`, [page])
+  const { data: stockData } = useApi('/inventory/stock')
   const total = data?.total ?? 0
+
+  // Build a quick lookup: resourceId -> stock item
+  const stockMap = {}
+  for (const s of (stockData?.items ?? [])) stockMap[s.resourceId] = s
 
   return (
     <div>
@@ -602,28 +643,134 @@ function ResourcesTab() {
                 <th className="text-left px-5 py-3">Name</th>
                 <th className="text-left px-5 py-3">Description</th>
                 <th className="text-left px-5 py-3">Catalog</th>
+                <th className="text-center px-5 py-3">In Stock</th>
+                <th className="text-center px-5 py-3">Sold</th>
                 <th className="text-left px-5 py-3">Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
-              {(data?.items ?? []).map(r => (
-                <tr key={r.id} className="hover:bg-white/[0.025] transition-colors">
-                  <td className="px-5 py-3 font-mono text-[11px] text-slate-500 max-w-[140px] truncate" title={r.id}>{r.id}</td>
-                  <td className="px-5 py-3 text-slate-200 font-semibold">{r.descriptor_name || '—'}</td>
-                  <td className="px-5 py-3 text-slate-400 text-xs max-w-[220px] truncate">{r.descriptor_short_desc || '—'}</td>
-                  <td className="px-5 py-3">
-                    <span className="text-[11px] bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 rounded-full text-slate-400">{r.catalog_id}</span>
-                  </td>
-                  <td className="px-5 py-3 text-slate-500 text-xs">{fmtDateShort(r.created_at?.Time || r.created_at)}</td>
-                </tr>
-              ))}
+              {(data?.items ?? []).map(r => {
+                const s = stockMap[r.id]
+                return (
+                  <tr key={r.id} className="hover:bg-white/[0.025] transition-colors">
+                    <td className="px-5 py-3 font-mono text-[11px] text-slate-500 max-w-[140px] truncate" title={r.id}>{r.id}</td>
+                    <td className="px-5 py-3 text-slate-200 font-semibold">{r.descriptor_name || '—'}</td>
+                    <td className="px-5 py-3 text-slate-400 text-xs max-w-[220px] truncate">{r.descriptor_short_desc || '—'}</td>
+                    <td className="px-5 py-3">
+                      <span className="text-[11px] bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 rounded-full text-slate-400">{r.catalog_id}</span>
+                    </td>
+                    <td className="px-5 py-3 text-center">
+                      {s
+                        ? <StockBadge qty={s.quantity} />
+                        : <span className="text-xs text-slate-600">—</span>}
+                    </td>
+                    <td className="px-5 py-3 text-center text-xs text-slate-400 font-semibold">
+                      {s ? s.sold : '—'}
+                    </td>
+                    <td className="px-5 py-3 text-slate-500 text-xs">{fmtDateShort(r.created_at?.Time || r.created_at)}</td>
+                  </tr>
+                )
+              })}
               {!data?.items?.length && (
-                <tr><td colSpan={5} className="px-5 py-12 text-center text-slate-500">No resources published yet</td></tr>
+                <tr><td colSpan={7} className="px-5 py-12 text-center text-slate-500">No resources published yet</td></tr>
               )}
             </tbody>
           </table>
         )}
         <Pagination page={page} totalPages={Math.max(1, Math.ceil(total / limit))} onPage={setPage} total={total} limit={limit} />
+      </Card>
+    </div>
+  )
+}
+
+// Stock badge: green if > 5, yellow if 1-5, red if 0
+function StockBadge({ qty }) {
+  if (qty === 0) return (
+    <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+      Out of Stock
+    </span>
+  )
+  if (qty <= 5) return (
+    <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+      Low: {qty}
+    </span>
+  )
+  return (
+    <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ color: '#10b981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+      {qty}
+    </span>
+  )
+}
+
+function StockTab() {
+  const { data, loading, error, reload } = useApi('/inventory/stock')
+  const items = data?.items ?? []
+
+  const totalStock = items.reduce((s, r) => s + r.quantity, 0)
+  const totalSold  = items.reduce((s, r) => s + r.sold, 0)
+  const outOfStock = items.filter(r => r.quantity === 0).length
+
+  return (
+    <div>
+      {error && <div className="mb-3"><ErrorBox message={error} onRetry={reload} /></div>}
+
+      {/* Quick stat bar */}
+      <div className="mt-4 grid grid-cols-3 gap-3 mb-4">
+        {[
+          { label: 'Total Items', value: items.length, color: '#00b8e6' },
+          { label: 'Units In Stock', value: totalStock, color: '#10b981' },
+          { label: 'Units Sold', value: totalSold, color: '#e6006e' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="rounded-xl p-4 border border-white/[0.07]" style={{ background: '#111827' }}>
+            <p className="text-[11px] uppercase tracking-widest font-semibold text-slate-500 mb-1">{label}</p>
+            <p className="text-2xl font-bold" style={{ color }}>{loading ? '…' : value}</p>
+          </div>
+        ))}
+      </div>
+
+      {outOfStock > 0 && (
+        <div className="mb-4 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2"
+          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+          <AlertCircle size={14} />
+          {outOfStock} resource{outOfStock !== 1 ? 's are' : ' is'} out of stock
+        </div>
+      )}
+
+      <Card>
+        {loading ? <LoadingSpinner label="Loading stock…" /> : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/[0.06]">
+                <th className="text-left px-5 py-3">Resource</th>
+                <th className="text-left px-5 py-3">Catalog</th>
+                <th className="text-center px-5 py-3">In Stock</th>
+                <th className="text-center px-5 py-3">Sold</th>
+                <th className="text-left px-5 py-3">Last Updated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {items.map(r => (
+                <tr key={r.resourceId} className="hover:bg-white/[0.025] transition-colors">
+                  <td className="px-5 py-3">
+                    <p className="text-slate-200 font-semibold text-sm">{r.name}</p>
+                    <p className="text-[11px] font-mono text-slate-600 mt-0.5" title={r.resourceId}>{r.resourceId}</p>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className="text-[11px] bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 rounded-full text-slate-400">{r.catalogId || '—'}</span>
+                  </td>
+                  <td className="px-5 py-3 text-center"><StockBadge qty={r.quantity} /></td>
+                  <td className="px-5 py-3 text-center text-sm font-bold text-slate-400">{r.sold}</td>
+                  <td className="px-5 py-3 text-xs text-slate-500">{fmtDate(r.updatedAt)}</td>
+                </tr>
+              ))}
+              {!items.length && (
+                <tr><td colSpan={5} className="px-5 py-12 text-center text-slate-500">
+                  No stock data yet — publish a catalog with stock quantities to start tracking
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </Card>
     </div>
   )
@@ -686,61 +833,174 @@ function InventoryPage({ initialTab = 'resources' }) {
   return (
     <div>
       <PageHeader breadcrumb="Inventory" title="Your Inventory"
-        subtitle="Resources and offers published to the ION network" />
+        subtitle="Resources, offers and live stock levels" />
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-        {['resources', 'offers'].map(t => (
+        {['resources', 'offers', 'stock'].map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${
               tab !== t ? 'text-slate-400 hover:text-slate-200' : 'text-white shadow-lg'
             }`}
             style={tab === t ? { background: BRAND } : {}}>
-            {t === 'resources' ? '📦 Resources' : '🏷️ Offers'}
+            {t === 'resources' ? '📦 Resources' : t === 'offers' ? '🏷️ Offers' : '📊 Stock'}
           </button>
         ))}
       </div>
-      {tab === 'resources' ? <ResourcesTab /> : <OffersTab />}
+      {tab === 'resources' ? <ResourcesTab /> : tab === 'offers' ? <OffersTab /> : <StockTab />}
     </div>
   )
 }
 
 // ─── Publish ──────────────────────────────────────────────────────────────────
 
-const EMPTY_RESOURCE = () => ({ id: '', name: '', short_desc: '', long_desc: '' })
-const EMPTY_OFFER    = () => ({ id: '', name: '', short_desc: '', resource_ids: '', price: '', currency: 'INR', validity_start: '', validity_end: '' })
+const EMPTY_RESOURCE = () => ({
+  id: '', name: '', short_desc: '', long_desc: '', stock_quantity: '',
+  media_url: '',
+  // identity
+  brand: '', origin_country: 'IN',
+  // physical
+  weight_value: '', weight_unit: 'G',
+  volume_value: '', volume_unit: 'ML',
+  dim_unit: 'CM', dim_length: '', dim_breadth: '', dim_height: '',
+  color: '', material: '', finish: '',
+  // packaged goods
+  mfr_type: 'MANUFACTURER', mfr_name: '', mfr_address: '',
+  common_name: '',
+  net_qty_value: '', net_qty_unit: 'ML',
+})
+
+const EMPTY_OFFER = () => ({
+  id: '', name: '', short_desc: '', resource_ids: '', price: '', currency: 'INR',
+  validity_start: '', validity_end: '',
+  // offer attributes
+  offer_context: 'https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailOffer/v2.1/context.jsonld',
+  // policies
+  returns_allowed: true,  returns_window: 'P7D',  returns_method: 'SELLER_PICKUP',
+  cancel_allowed:  true,  cancel_window:  'PT2H', cancel_event:   'BEFORE_PACKING',
+  replace_allowed: true,  replace_window: 'P7D',  replace_method: 'SELLER_PICKUP', replace_subject_avail: true,
+  // payment & serviceability
+  cod_available: true,
+  max_distance: '15', distance_unit: 'KM',
+  timing_days: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
+  timing_start: '09:00', timing_end: '21:00',
+})
+
 const CATALOG_TYPES  = ['', 'master', 'regular']
+const ALL_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+
+// Build resourceAttributes JSON-LD object from flat form fields.
+function buildResourceAttrs(r) {
+  const hasIdentity  = r.brand || r.origin_country
+  const hasPhysical  = r.weight_value || r.volume_value || r.dim_length || r.color || r.material || r.finish
+  const hasPkg       = r.mfr_name || r.common_name || r.net_qty_value
+  if (!hasIdentity && !hasPhysical && !hasPkg) return undefined
+
+  const attrs = {
+    '@context': 'https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailItem/v2.1/context.jsonld',
+    '@type': 'RetailItem',
+  }
+  if (hasIdentity) {
+    attrs.identity = {}
+    if (r.brand)          attrs.identity.brand         = r.brand
+    if (r.origin_country) attrs.identity.originCountry = r.origin_country
+  }
+  if (hasPhysical) {
+    attrs.physical = {}
+    if (r.weight_value) attrs.physical.weight     = { unitCode: r.weight_unit, unitQuantity: Number(r.weight_value) }
+    if (r.volume_value) attrs.physical.volume     = { unitCode: r.volume_unit, unitQuantity: Number(r.volume_value) }
+    if (r.dim_length || r.dim_breadth || r.dim_height)
+      attrs.physical.dimensions = { unit: r.dim_unit, length: Number(r.dim_length) || 0, breadth: Number(r.dim_breadth) || 0, height: Number(r.dim_height) || 0 }
+    if (r.color || r.material || r.finish) {
+      attrs.physical.appearance = {}
+      if (r.color)    attrs.physical.appearance.color    = r.color
+      if (r.material) attrs.physical.appearance.material = r.material
+      if (r.finish)   attrs.physical.appearance.finish   = r.finish
+    }
+  }
+  if (hasPkg) {
+    attrs.packagedGoodsDeclaration = {}
+    if (r.mfr_name) attrs.packagedGoodsDeclaration.manufacturerOrPacker = { type: r.mfr_type, name: r.mfr_name, ...(r.mfr_address ? { address: r.mfr_address } : {}) }
+    if (r.common_name) attrs.packagedGoodsDeclaration.commonOrGenericName = r.common_name
+    if (r.net_qty_value) attrs.packagedGoodsDeclaration.netQuantity = { unitCode: r.net_qty_unit, unitQuantity: Number(r.net_qty_value) }
+  }
+  return attrs
+}
+
+// Build offerAttributes JSON-LD from flat form fields.
+function buildOfferAttrs(o) {
+  return {
+    '@context': o.offer_context,
+    '@type': 'RetailOffer',
+    policies: {
+      returns: { allowed: o.returns_allowed, ...(o.returns_allowed ? { window: o.returns_window, method: o.returns_method } : {}) },
+      cancellation: { allowed: o.cancel_allowed, ...(o.cancel_allowed ? { window: o.cancel_window, cutoffEvent: o.cancel_event } : {}) },
+      replacement: { allowed: o.replace_allowed, ...(o.replace_allowed ? { window: o.replace_window, method: o.replace_method, subjectToAvailability: o.replace_subject_avail } : {}) },
+    },
+    paymentConstraints: { codAvailable: o.cod_available },
+    serviceability: {
+      distanceConstraint: { maxDistance: Number(o.max_distance) || 15, unit: o.distance_unit },
+      timing: [{ daysOfWeek: o.timing_days, timeRange: { start: o.timing_start, end: o.timing_end } }],
+    },
+  }
+}
 
 function PublishPage({ onNav }) {
   const [step, setStep]       = useState(0) // 0=catalog, 1=resources, 2=offers, 3=review
   const [form, setForm]       = useState({
     catalog_id: '', catalog_name: '', provider_id: '', provider_name: '', catalog_type: '',
+    validity_start: '', validity_end: '',
     resources: [EMPTY_RESOURCE()], offers: [EMPTY_OFFER()],
   })
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(false)
+  // track which resource/offer "advanced" sections are expanded
+  const [resOpen, setResOpen] = useState({})
+  const [offOpen, setOffOpen] = useState({})
 
   const STEPS = ['Catalog Info', 'Resources', 'Offers', 'Review & Publish']
 
-  const setField        = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const setField         = (k, v)    => setForm(f => ({ ...f, [k]: v }))
   const setResourceField = (i, k, v) => setForm(f => { const r = [...f.resources]; r[i] = { ...r[i], [k]: v }; return { ...f, resources: r } })
-  const setOfferField   = (i, k, v) => setForm(f => { const o = [...f.offers]; o[i] = { ...o[i], [k]: v }; return { ...f, offers: o } })
-  const toISO           = dt => dt ? new Date(dt).toISOString() : undefined
+  const setOfferField    = (i, k, v) => setForm(f => { const o = [...f.offers];    o[i] = { ...o[i], [k]: v }; return { ...f, offers: o } })
+  const toggleDay        = (i, day)  => setForm(f => {
+    const o = [...f.offers]; const days = o[i].timing_days
+    o[i] = { ...o[i], timing_days: days.includes(day) ? days.filter(d => d !== day) : [...days, day] }
+    return { ...f, offers: o }
+  })
+  const toISO = dt => dt ? new Date(dt).toISOString() : undefined
 
   const handleSubmit = async () => {
     setLoading(true); setError(null)
     try {
+      const catStart = toISO(form.validity_start), catEnd = toISO(form.validity_end)
       const catalog = {
         id: form.catalog_id,
         descriptor: { name: form.catalog_name },
         provider: { id: form.provider_id, descriptor: { name: form.provider_name } },
-        resources: form.resources.map(r => ({ id: r.id, descriptor: { name: r.name, shortDesc: r.short_desc, longDesc: r.long_desc } })),
+        ...(catStart ? { validity: { startDate: catStart, endDate: catEnd } } : {}),
+        resources: form.resources.map(r => {
+          const mediaFile = r.media_url ? [{ uri: r.media_url, mimeType: 'image/jpeg' }] : undefined
+          const attrs = buildResourceAttrs(r)
+          return {
+            id: r.id,
+            descriptor: {
+              name: r.name, shortDesc: r.short_desc, longDesc: r.long_desc,
+              ...(mediaFile ? { mediaFile } : {}),
+            },
+            ...(attrs ? { resourceAttributes: attrs } : {}),
+            ...(r.stock_quantity !== '' && !isNaN(Number(r.stock_quantity)) ? { stockQuantity: Number(r.stock_quantity) } : {}),
+          }
+        }),
         offers: form.offers.map(o => {
           const start = toISO(o.validity_start), end = toISO(o.validity_end)
+          const offerAttrs = buildOfferAttrs(o)
           return {
-            id: o.id, descriptor: { name: o.name, shortDesc: o.short_desc },
+            id: o.id,
+            descriptor: { name: o.name, shortDesc: o.short_desc },
             resourceIds: o.resource_ids.split(',').map(s => s.trim()).filter(Boolean),
             ...(o.price ? { considerations: [{ id: `${o.id}-price`, status: { code: 'ACTIVE' },
               considerationAttributes: JSON.stringify({ '@type': 'PriceSpecification', price: o.price, currency: o.currency }) }] } : {}),
             ...(start ? { validity: { startDate: start, endDate: end } } : {}),
+            offerAttributes: offerAttrs,
           }
         }),
         ...(form.catalog_type ? { publishDirectives: { catalogType: form.catalog_type } } : {}),
@@ -755,7 +1015,7 @@ function PublishPage({ onNav }) {
   const labelCls = 'block text-xs font-semibold text-slate-400 mb-1.5'
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <PageHeader breadcrumb="Publish Catalog" title="Publish to Network"
         subtitle="Push your resources and offers to the ION network" />
 
@@ -790,22 +1050,22 @@ function PublishPage({ onNav }) {
           initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.18 }}>
 
-          {/* Step 0: Catalog Info */}
+          {/* ── Step 0: Catalog Info ── */}
           {step === 0 && (
-            <Card className="p-6 space-y-4">
-              <p className="text-sm font-bold text-white mb-4">Catalog Details</p>
+            <Card className="p-6 space-y-5">
+              <p className="text-sm font-bold text-white">Catalog Details</p>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>Catalog ID *</label>
-                  <input className={inputCls} value={form.catalog_id} onChange={e => setField('catalog_id', e.target.value)} placeholder="cat-winroom-2026" required />
+                  <input className={inputCls} value={form.catalog_id} onChange={e => setField('catalog_id', e.target.value)} placeholder="cat-venky-bazaar-2026" required />
                 </div>
                 <div><label className={labelCls}>Catalog Name *</label>
-                  <input className={inputCls} value={form.catalog_name} onChange={e => setField('catalog_name', e.target.value)} placeholder="Winroom Hotel Catalog" required />
+                  <input className={inputCls} value={form.catalog_name} onChange={e => setField('catalog_name', e.target.value)} placeholder="Venky Bazaar Catalog" required />
                 </div>
                 <div><label className={labelCls}>Provider ID *</label>
-                  <input className={inputCls} value={form.provider_id} onChange={e => setField('provider_id', e.target.value)} placeholder="prov-winroom-001" required />
+                  <input className={inputCls} value={form.provider_id} onChange={e => setField('provider_id', e.target.value)} placeholder="provider-venky-bazaar" required />
                 </div>
                 <div><label className={labelCls}>Provider Name *</label>
-                  <input className={inputCls} value={form.provider_name} onChange={e => setField('provider_name', e.target.value)} placeholder="Winroom Hotels Pvt Ltd" required />
+                  <input className={inputCls} value={form.provider_name} onChange={e => setField('provider_name', e.target.value)} placeholder="Venky.Mahadevan@Bazaar" required />
                 </div>
                 <div className="col-span-2">
                   <label className={labelCls}>Catalog Type <span className="text-slate-600 font-normal">(optional)</span></label>
@@ -814,20 +1074,30 @@ function PublishPage({ onNav }) {
                   </select>
                 </div>
               </div>
+              {/* Catalog validity */}
+              <div className="pt-3 border-t border-white/[0.06]">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Catalog Validity <span className="text-slate-600 font-normal normal-case">(optional)</span></p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className={labelCls}>Valid From</label>
+                    <input type="datetime-local" className={inputCls} value={form.validity_start} onChange={e => setField('validity_start', e.target.value)} />
+                  </div>
+                  <div><label className={labelCls}>Valid Until</label>
+                    <input type="datetime-local" className={inputCls} value={form.validity_end} onChange={e => setField('validity_end', e.target.value)} />
+                  </div>
+                </div>
+              </div>
             </Card>
           )}
 
-          {/* Step 1: Resources */}
+          {/* ── Step 1: Resources ── */}
           {step === 1 && (
-            <div className="space-y-3">
+            <div className="space-y-3 max-w-2xl">
               {form.resources.map((r, i) => (
                 <Card key={i} className="p-5">
+                  {/* Card header */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white"
-                        style={{ background: BRAND }}>
-                        {i + 1}
-                      </div>
+                      <div className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white" style={{ background: BRAND }}>{i + 1}</div>
                       <p className="text-sm font-bold text-white">Resource {i + 1}</p>
                     </div>
                     {form.resources.length > 1 && (
@@ -837,20 +1107,130 @@ function PublishPage({ onNav }) {
                       </button>
                     )}
                   </div>
+
+                  {/* Basic info */}
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className={labelCls}>Resource ID *</label>
-                      <input className={inputCls} value={r.id} onChange={e => setResourceField(i, 'id', e.target.value)} placeholder="room-deluxe-001" required />
+                      <input className={inputCls} value={r.id} onChange={e => setResourceField(i, 'id', e.target.value)} placeholder="item-flask-mh500-yellow" required />
                     </div>
                     <div><label className={labelCls}>Name *</label>
-                      <input className={inputCls} value={r.name} onChange={e => setResourceField(i, 'name', e.target.value)} placeholder="Deluxe Room" required />
+                      <input className={inputCls} value={r.name} onChange={e => setResourceField(i, 'name', e.target.value)} placeholder="Stainless Steel Hiking Flask" required />
                     </div>
                     <div><label className={labelCls}>Short Description</label>
-                      <input className={inputCls} value={r.short_desc} onChange={e => setResourceField(i, 'short_desc', e.target.value)} placeholder="Cozy deluxe room with city view" />
+                      <input className={inputCls} value={r.short_desc} onChange={e => setResourceField(i, 'short_desc', e.target.value)} placeholder="500ml insulated flask" />
                     </div>
                     <div><label className={labelCls}>Long Description</label>
-                      <input className={inputCls} value={r.long_desc} onChange={e => setResourceField(i, 'long_desc', e.target.value)} placeholder="Full description…" />
+                      <input className={inputCls} value={r.long_desc} onChange={e => setResourceField(i, 'long_desc', e.target.value)} placeholder="Full product description…" />
+                    </div>
+                    <div><label className={labelCls}>Stock Quantity <span className="text-slate-600 font-normal">(blank = unlimited)</span></label>
+                      <input className={inputCls} type="number" min="0" value={r.stock_quantity} onChange={e => setResourceField(i, 'stock_quantity', e.target.value)} placeholder="e.g. 50" />
+                    </div>
+                    <div><label className={labelCls}>Image URL <span className="text-slate-600 font-normal">(optional)</span></label>
+                      <input className={inputCls} value={r.media_url} onChange={e => setResourceField(i, 'media_url', e.target.value)} placeholder="https://example.com/product.jpg" />
                     </div>
                   </div>
+
+                  {/* Identity & Physical — collapsible */}
+                  <button onClick={() => setResOpen(s => ({ ...s, [`${i}_phys`]: !s[`${i}_phys`] }))}
+                    className="mt-4 w-full flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors pt-3 border-t border-white/[0.06]">
+                    <span>🏷️ Identity &amp; Physical Attributes</span>
+                    <ChevronRightIcon size={13} className={`transition-transform ${resOpen[`${i}_phys`] ? 'rotate-90' : ''}`} />
+                  </button>
+                  {resOpen[`${i}_phys`] && (
+                    <div className="mt-3 space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>Brand</label>
+                          <input className={inputCls} value={r.brand} onChange={e => setResourceField(i, 'brand', e.target.value)} placeholder="InstaCuppa" />
+                        </div>
+                        <div><label className={labelCls}>Origin Country</label>
+                          <input className={inputCls} value={r.origin_country} onChange={e => setResourceField(i, 'origin_country', e.target.value)} placeholder="IN" />
+                        </div>
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">Weight &amp; Volume</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        <div className="col-span-2"><label className={labelCls}>Weight</label>
+                          <input className={inputCls} type="number" value={r.weight_value} onChange={e => setResourceField(i, 'weight_value', e.target.value)} placeholder="350" />
+                        </div>
+                        <div className="col-span-2"><label className={labelCls}>Unit</label>
+                          <select className={inputCls} value={r.weight_unit} onChange={e => setResourceField(i, 'weight_unit', e.target.value)}>
+                            {['G', 'KG', 'MG', 'OZ', 'LB'].map(u => <option key={u}>{u}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-2"><label className={labelCls}>Volume</label>
+                          <input className={inputCls} type="number" value={r.volume_value} onChange={e => setResourceField(i, 'volume_value', e.target.value)} placeholder="500" />
+                        </div>
+                        <div className="col-span-2"><label className={labelCls}>Unit</label>
+                          <select className={inputCls} value={r.volume_unit} onChange={e => setResourceField(i, 'volume_unit', e.target.value)}>
+                            {['ML', 'L', 'FL_OZ'].map(u => <option key={u}>{u}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">Dimensions</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        <div><label className={labelCls}>L (cm)</label>
+                          <input className={inputCls} type="number" value={r.dim_length} onChange={e => setResourceField(i, 'dim_length', e.target.value)} placeholder="25" />
+                        </div>
+                        <div><label className={labelCls}>B (cm)</label>
+                          <input className={inputCls} type="number" value={r.dim_breadth} onChange={e => setResourceField(i, 'dim_breadth', e.target.value)} placeholder="7" />
+                        </div>
+                        <div><label className={labelCls}>H (cm)</label>
+                          <input className={inputCls} type="number" value={r.dim_height} onChange={e => setResourceField(i, 'dim_height', e.target.value)} placeholder="7" />
+                        </div>
+                        <div><label className={labelCls}>Unit</label>
+                          <select className={inputCls} value={r.dim_unit} onChange={e => setResourceField(i, 'dim_unit', e.target.value)}>
+                            {['CM', 'MM', 'IN'].map(u => <option key={u}>{u}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">Appearance</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div><label className={labelCls}>Color</label>
+                          <input className={inputCls} value={r.color} onChange={e => setResourceField(i, 'color', e.target.value)} placeholder="Yellow" />
+                        </div>
+                        <div><label className={labelCls}>Material</label>
+                          <input className={inputCls} value={r.material} onChange={e => setResourceField(i, 'material', e.target.value)} placeholder="Stainless Steel" />
+                        </div>
+                        <div><label className={labelCls}>Finish</label>
+                          <input className={inputCls} value={r.finish} onChange={e => setResourceField(i, 'finish', e.target.value)} placeholder="Matte" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Packaged goods — collapsible */}
+                  <button onClick={() => setResOpen(s => ({ ...s, [`${i}_pkg`]: !s[`${i}_pkg`] }))}
+                    className="mt-4 w-full flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors pt-3 border-t border-white/[0.06]">
+                    <span>📦 Packaged Goods Declaration</span>
+                    <ChevronRightIcon size={13} className={`transition-transform ${resOpen[`${i}_pkg`] ? 'rotate-90' : ''}`} />
+                  </button>
+                  {resOpen[`${i}_pkg`] && (
+                    <div className="mt-3 space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>Manufacturer Type</label>
+                          <select className={inputCls} value={r.mfr_type} onChange={e => setResourceField(i, 'mfr_type', e.target.value)}>
+                            {['MANUFACTURER', 'PACKER', 'IMPORTER'].map(t => <option key={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <div><label className={labelCls}>Manufacturer Name</label>
+                          <input className={inputCls} value={r.mfr_name} onChange={e => setResourceField(i, 'mfr_name', e.target.value)} placeholder="InstaCuppa India Pvt Ltd" />
+                        </div>
+                        <div className="col-span-2"><label className={labelCls}>Manufacturer Address</label>
+                          <input className={inputCls} value={r.mfr_address} onChange={e => setResourceField(i, 'mfr_address', e.target.value)} placeholder="Bangalore, Karnataka, IN" />
+                        </div>
+                        <div><label className={labelCls}>Common / Generic Name</label>
+                          <input className={inputCls} value={r.common_name} onChange={e => setResourceField(i, 'common_name', e.target.value)} placeholder="Stainless Steel Vacuum Flask" />
+                        </div>
+                        <div><label className={labelCls}>Net Qty</label>
+                          <div className="flex gap-2">
+                            <input className={inputCls} type="number" value={r.net_qty_value} onChange={e => setResourceField(i, 'net_qty_value', e.target.value)} placeholder="500" />
+                            <select className={inputCls + ' w-24 shrink-0'} value={r.net_qty_unit} onChange={e => setResourceField(i, 'net_qty_unit', e.target.value)}>
+                              {['ML', 'L', 'G', 'KG', 'PCS'].map(u => <option key={u}>{u}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </Card>
               ))}
               <button onClick={() => setForm(f => ({ ...f, resources: [...f.resources, EMPTY_RESOURCE()] }))}
@@ -860,17 +1240,15 @@ function PublishPage({ onNav }) {
             </div>
           )}
 
-          {/* Step 2: Offers */}
+          {/* ── Step 2: Offers ── */}
           {step === 2 && (
-            <div className="space-y-3">
+            <div className="space-y-3 max-w-2xl">
               {form.offers.map((o, i) => (
                 <Card key={i} className="p-5">
+                  {/* Card header */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white"
-                        style={{ background: BRAND2 }}>
-                        {i + 1}
-                      </div>
+                      <div className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white" style={{ background: BRAND2 }}>{i + 1}</div>
                       <p className="text-sm font-bold text-white">Offer {i + 1}</p>
                     </div>
                     {form.offers.length > 1 && (
@@ -880,35 +1258,170 @@ function PublishPage({ onNav }) {
                       </button>
                     )}
                   </div>
+
+                  {/* Basic info */}
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className={labelCls}>Offer ID *</label>
-                      <input className={inputCls} value={o.id} onChange={e => setOfferField(i, 'id', e.target.value)} placeholder="offer-deluxe-bb" required />
+                      <input className={inputCls} value={o.id} onChange={e => setOfferField(i, 'id', e.target.value)} placeholder="offer-flask-mh500-yellow" required />
                     </div>
                     <div><label className={labelCls}>Offer Name *</label>
-                      <input className={inputCls} value={o.name} onChange={e => setOfferField(i, 'name', e.target.value)} placeholder="Deluxe – Bed & Breakfast" required />
+                      <input className={inputCls} value={o.name} onChange={e => setOfferField(i, 'name', e.target.value)} placeholder="Hiking Flask MH500 Yellow" required />
                     </div>
                     <div className="col-span-2"><label className={labelCls}>Short Description</label>
                       <input className={inputCls} value={o.short_desc} onChange={e => setOfferField(i, 'short_desc', e.target.value)} placeholder="Brief offer description" />
                     </div>
                     <div className="col-span-2"><label className={labelCls}>Resource IDs <span className="text-slate-600 font-normal">(comma-separated)</span></label>
-                      <input className={inputCls} value={o.resource_ids} onChange={e => setOfferField(i, 'resource_ids', e.target.value)} placeholder="room-deluxe-001, room-deluxe-002" />
+                      <input className={inputCls} value={o.resource_ids} onChange={e => setOfferField(i, 'resource_ids', e.target.value)} placeholder="item-flask-mh500-yellow" />
                     </div>
                     <div><label className={labelCls}>Price</label>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm">₹</span>
-                        <input className={inputCls + ' pl-7'} value={o.price} onChange={e => setOfferField(i, 'price', e.target.value)} placeholder="4500" />
+                        <input className={inputCls + ' pl-7'} value={o.price} onChange={e => setOfferField(i, 'price', e.target.value)} placeholder="799" />
                       </div>
                     </div>
                     <div><label className={labelCls}>Currency</label>
                       <input className={inputCls} value={o.currency} onChange={e => setOfferField(i, 'currency', e.target.value)} placeholder="INR" />
                     </div>
-                    <div><label className={labelCls}>Validity Start <span className="text-slate-600 font-normal">(optional)</span></label>
+                    <div><label className={labelCls}>Validity Start</label>
                       <input type="datetime-local" className={inputCls} value={o.validity_start} onChange={e => setOfferField(i, 'validity_start', e.target.value)} />
                     </div>
-                    <div><label className={labelCls}>Validity End <span className="text-slate-600 font-normal">(optional)</span></label>
+                    <div><label className={labelCls}>Validity End</label>
                       <input type="datetime-local" className={inputCls} value={o.validity_end} onChange={e => setOfferField(i, 'validity_end', e.target.value)} />
                     </div>
                   </div>
+
+                  {/* Policies — collapsible */}
+                  <button onClick={() => setOffOpen(s => ({ ...s, [`${i}_pol`]: !s[`${i}_pol`] }))}
+                    className="mt-4 w-full flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors pt-3 border-t border-white/[0.06]">
+                    <span>📋 Policies (Returns · Cancellation · Replacement)</span>
+                    <ChevronRightIcon size={13} className={`transition-transform ${offOpen[`${i}_pol`] ? 'rotate-90' : ''}`} />
+                  </button>
+                  {offOpen[`${i}_pol`] && (
+                    <div className="mt-3 space-y-4">
+                      {/* Returns */}
+                      <div className="p-3 rounded-lg border border-white/[0.06]" style={{ background: 'rgba(0,184,230,0.04)' }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-bold text-cyan-400">Returns</p>
+                          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                            <input type="checkbox" className="rounded" checked={o.returns_allowed} onChange={e => setOfferField(i, 'returns_allowed', e.target.checked)} />
+                            Allowed
+                          </label>
+                        </div>
+                        {o.returns_allowed && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div><label className={labelCls}>Window (ISO 8601)</label>
+                              <input className={inputCls} value={o.returns_window} onChange={e => setOfferField(i, 'returns_window', e.target.value)} placeholder="P7D" />
+                            </div>
+                            <div><label className={labelCls}>Method</label>
+                              <select className={inputCls} value={o.returns_method} onChange={e => setOfferField(i, 'returns_method', e.target.value)}>
+                                {['SELLER_PICKUP', 'BUYER_DROP', 'REVERSE_PICKUP'].map(m => <option key={m}>{m}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* Cancellation */}
+                      <div className="p-3 rounded-lg border border-white/[0.06]" style={{ background: 'rgba(245,158,11,0.04)' }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-bold text-amber-400">Cancellation</p>
+                          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                            <input type="checkbox" className="rounded" checked={o.cancel_allowed} onChange={e => setOfferField(i, 'cancel_allowed', e.target.checked)} />
+                            Allowed
+                          </label>
+                        </div>
+                        {o.cancel_allowed && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div><label className={labelCls}>Window (ISO 8601)</label>
+                              <input className={inputCls} value={o.cancel_window} onChange={e => setOfferField(i, 'cancel_window', e.target.value)} placeholder="PT2H" />
+                            </div>
+                            <div><label className={labelCls}>Cutoff Event</label>
+                              <select className={inputCls} value={o.cancel_event} onChange={e => setOfferField(i, 'cancel_event', e.target.value)}>
+                                {['BEFORE_PACKING', 'BEFORE_DISPATCH', 'BEFORE_DELIVERY'].map(e => <option key={e}>{e}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* Replacement */}
+                      <div className="p-3 rounded-lg border border-white/[0.06]" style={{ background: 'rgba(16,185,129,0.04)' }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-bold text-emerald-400">Replacement</p>
+                          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                            <input type="checkbox" className="rounded" checked={o.replace_allowed} onChange={e => setOfferField(i, 'replace_allowed', e.target.checked)} />
+                            Allowed
+                          </label>
+                        </div>
+                        {o.replace_allowed && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div><label className={labelCls}>Window (ISO 8601)</label>
+                              <input className={inputCls} value={o.replace_window} onChange={e => setOfferField(i, 'replace_window', e.target.value)} placeholder="P7D" />
+                            </div>
+                            <div><label className={labelCls}>Method</label>
+                              <select className={inputCls} value={o.replace_method} onChange={e => setOfferField(i, 'replace_method', e.target.value)}>
+                                {['SELLER_PICKUP', 'BUYER_DROP', 'REVERSE_PICKUP'].map(m => <option key={m}>{m}</option>)}
+                              </select>
+                            </div>
+                            <div className="col-span-2">
+                              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                                <input type="checkbox" className="rounded" checked={o.replace_subject_avail} onChange={e => setOfferField(i, 'replace_subject_avail', e.target.checked)} />
+                                Subject to availability
+                              </label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Payment & Serviceability — collapsible */}
+                  <button onClick={() => setOffOpen(s => ({ ...s, [`${i}_svc`]: !s[`${i}_svc`] }))}
+                    className="mt-4 w-full flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors pt-3 border-t border-white/[0.06]">
+                    <span>🚚 Payment &amp; Serviceability</span>
+                    <ChevronRightIcon size={13} className={`transition-transform ${offOpen[`${i}_svc`] ? 'rotate-90' : ''}`} />
+                  </button>
+                  {offOpen[`${i}_svc`] && (
+                    <div className="mt-3 space-y-4">
+                      <label className="flex items-center gap-3 text-sm text-slate-300 cursor-pointer">
+                        <input type="checkbox" className="rounded" checked={o.cod_available} onChange={e => setOfferField(i, 'cod_available', e.target.checked)} />
+                        <span>Cash on Delivery (COD) available</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2"><label className={labelCls}>Max Delivery Distance</label>
+                          <input className={inputCls} type="number" value={o.max_distance} onChange={e => setOfferField(i, 'max_distance', e.target.value)} placeholder="15" />
+                        </div>
+                        <div><label className={labelCls}>Unit</label>
+                          <select className={inputCls} value={o.distance_unit} onChange={e => setOfferField(i, 'distance_unit', e.target.value)}>
+                            {['KM', 'MI'].map(u => <option key={u}>{u}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Delivery Days</label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {ALL_DAYS.map(day => (
+                            <button key={day} type="button"
+                              onClick={() => toggleDay(i, day)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                                o.timing_days.includes(day)
+                                  ? 'text-white border-cyan-500/40'
+                                  : 'text-slate-500 border-white/[0.08] hover:border-white/20'
+                              }`}
+                              style={o.timing_days.includes(day) ? { background: 'rgba(0,184,230,0.15)' } : {}}>
+                              {day}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>Delivery Window Start</label>
+                          <input type="time" className={inputCls} value={o.timing_start} onChange={e => setOfferField(i, 'timing_start', e.target.value)} />
+                        </div>
+                        <div><label className={labelCls}>Delivery Window End</label>
+                          <input type="time" className={inputCls} value={o.timing_end} onChange={e => setOfferField(i, 'timing_end', e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </Card>
               ))}
               <button onClick={() => setForm(f => ({ ...f, offers: [...f.offers, EMPTY_OFFER()] }))}
@@ -918,13 +1431,19 @@ function PublishPage({ onNav }) {
             </div>
           )}
 
-          {/* Step 3: Review */}
+          {/* ── Step 3: Review ── */}
           {step === 3 && (
             <div className="space-y-4">
               <Card className="p-5">
                 <SectionTitle>Catalog</SectionTitle>
                 <div className="space-y-2 text-sm">
-                  {[['ID', form.catalog_id], ['Name', form.catalog_name], ['Provider', `${form.provider_name} (${form.provider_id})`], ['Type', form.catalog_type || 'Not set']].map(([k, v]) => (
+                  {[
+                    ['ID', form.catalog_id], ['Name', form.catalog_name],
+                    ['Provider', `${form.provider_name} (${form.provider_id})`],
+                    ['Type', form.catalog_type || 'Not set'],
+                    ['Valid From', form.validity_start ? fmtDate(new Date(form.validity_start).toISOString()) : '—'],
+                    ['Valid Until', form.validity_end   ? fmtDate(new Date(form.validity_end).toISOString())   : '—'],
+                  ].map(([k, v]) => (
                     <div key={k} className="flex justify-between">
                       <span className="text-slate-500">{k}</span>
                       <span className="text-slate-200 font-medium">{v || '—'}</span>
@@ -934,24 +1453,51 @@ function PublishPage({ onNav }) {
               </Card>
               <Card className="p-5">
                 <SectionTitle>Resources ({form.resources.length})</SectionTitle>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {form.resources.map((r, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm">
-                      <Package size={13} className="text-slate-500 shrink-0" />
-                      <span className="text-slate-200 font-medium">{r.name || '—'}</span>
-                      <span className="text-slate-500 text-xs ml-auto">{r.id}</span>
+                    <div key={i} className="flex items-start gap-3 text-sm">
+                      {r.media_url
+                        ? <img src={r.media_url} alt={r.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/[0.08]" onError={e => { e.target.style.display='none' }} />
+                        : <div className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center" style={{ background: 'rgba(0,184,230,0.08)', border: '1px solid rgba(0,184,230,0.15)' }}><Package size={16} style={{ color: '#00b8e6' }} /></div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-200 font-semibold truncate">{r.name || '—'}</p>
+                        <p className="text-[11px] font-mono text-slate-600">{r.id}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {r.brand && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">{r.brand}</span>}
+                          {r.color && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">{r.color}</span>}
+                          {r.material && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">{r.material}</span>}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-xs px-2 py-0.5 rounded-full border"
+                        style={r.stock_quantity !== '' && !isNaN(Number(r.stock_quantity))
+                          ? { color: '#00b8e6', borderColor: 'rgba(0,184,230,0.25)', background: 'rgba(0,184,230,0.08)' }
+                          : { color: '#64748b', borderColor: 'rgba(255,255,255,0.08)' }}>
+                        {r.stock_quantity !== '' && !isNaN(Number(r.stock_quantity)) ? `Qty: ${r.stock_quantity}` : '∞ Unlimited'}
+                      </span>
                     </div>
                   ))}
                 </div>
               </Card>
               <Card className="p-5">
                 <SectionTitle>Offers ({form.offers.length})</SectionTitle>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {form.offers.map((o, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm">
-                      <Tag size={13} className="text-slate-500 shrink-0" />
-                      <span className="text-slate-200 font-medium">{o.name || '—'}</span>
-                      {o.price && <span className="text-xs font-bold ml-auto" style={{ color: '#00b8e6' }}>₹{o.price} {o.currency}</span>}
+                    <div key={i} className="flex items-start justify-between gap-3 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Tag size={13} className="text-slate-500 shrink-0" />
+                          <span className="text-slate-200 font-semibold truncate">{o.name || '—'}</span>
+                        </div>
+                        <p className="text-[11px] font-mono text-slate-600 mt-0.5 ml-5">{o.id}</p>
+                        <div className="flex flex-wrap gap-1 mt-1 ml-5">
+                          {o.cod_available && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">COD ✓</span>}
+                          {o.returns_allowed && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">Returns {o.returns_window}</span>}
+                          {o.max_distance && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">📍 {o.max_distance} {o.distance_unit}</span>}
+                          {o.timing_days.length < 7 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">{o.timing_days.join(', ')}</span>}
+                        </div>
+                      </div>
+                      {o.price && <span className="shrink-0 text-xs font-bold" style={{ color: '#00b8e6' }}>₹{o.price} {o.currency}</span>}
                     </div>
                   ))}
                 </div>
@@ -1117,6 +1663,163 @@ function MessagesPage() {
   )
 }
 
+// ─── OrderRatings (inline inside OrderDetailDrawer) ──────────────────────────
+
+function OrderRatings({ contractId }) {
+  const { data, loading } = useApi(contractId ? `/ratings?limit=20` : null, [contractId])
+  const ratings = (data?.items || []).filter(r => r.contractId === contractId)
+  if (loading) return null
+  if (!ratings.length) return null
+  return (
+    <section>
+      <SectionTitle>Customer Ratings ({ratings.length})</SectionTitle>
+      <div className="space-y-2">
+        {ratings.map(r => {
+          let range = r.range
+          try { if (typeof range === 'string') range = JSON.parse(range) } catch {}
+          const score = range?.value ?? range?.score ?? '?'
+          const max   = range?.max ?? 5
+          return (
+            <Card key={r.id} className="p-4">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: max }, (_, i) => (
+                    <Star key={i} size={12} className={i < score ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
+                  ))}
+                  <span className="text-xs text-slate-400 ml-1">{score}/{max}</span>
+                </div>
+                <span className="text-[10px] text-slate-500">{fmtDate(r.createdAt)}</span>
+              </div>
+              <p className="text-[10px] text-slate-500">{r.bapId}</p>
+            </Card>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+// ─── SupportPage ─────────────────────────────────────────────────────────────
+
+function SupportPage() {
+  const [page, setPage] = useState(1)
+  const limit = 20
+  const { data, loading, error, reload } = useApi(`/support-tickets?page=${page}&limit=${limit}`, [page])
+  const items = data?.items || []
+  const total = data?.total ?? 0
+  const totalPages = Math.ceil(total / limit) || 1
+
+  const statusCls = {
+    OPEN:     'bg-amber-500/15 text-amber-400 border border-amber-500/25',
+    RESOLVED: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25',
+  }
+
+  return (
+    <div>
+      <PageHeader title="Support Tickets" subtitle="Customer support requests received via Beckn protocol"
+        action={<button onClick={reload} className="flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl text-slate-300 border border-white/10 hover:border-white/20 transition-all"><RefreshCw size={13} /> Refresh</button>} />
+
+      {error && <ErrorBox message={error} onRetry={reload} />}
+
+      <Card>
+        {loading ? <LoadingSpinner label="Loading tickets…" /> : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/[0.06]">
+                {['Ticket ID', 'Order (Txn)', 'BAP', 'Description', 'Status', 'Created'].map(h => (
+                  <th key={h} className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(t => (
+                <tr key={t.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                  <td className="px-5 py-3 font-mono text-slate-400">{t.id.slice(0,8)}…</td>
+                  <td className="px-5 py-3 font-mono text-slate-400">{t.transactionId ? t.transactionId.slice(0,8) + '…' : '—'}</td>
+                  <td className="px-5 py-3 text-slate-300 max-w-[140px] truncate">{t.bapId || '—'}</td>
+                  <td className="px-5 py-3 text-slate-300 max-w-[200px] truncate">{t.name || t.shortDesc || '—'}</td>
+                  <td className="px-5 py-3">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusCls[t.status] || 'bg-slate-500/15 text-slate-400'}`}>
+                      {t.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-slate-500">{fmtDateShort(t.createdAt)}</td>
+                </tr>
+              ))}
+              {!items.length && (
+                <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-500">No support tickets yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+        <Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} limit={limit} />
+      </Card>
+    </div>
+  )
+}
+
+// ─── RatingsPage ─────────────────────────────────────────────────────────────
+
+function RatingsPage() {
+  const [page, setPage] = useState(1)
+  const limit = 20
+  const { data, loading, error, reload } = useApi(`/ratings?page=${page}&limit=${limit}`, [page])
+  const items = data?.items || []
+  const total = data?.total ?? 0
+  const totalPages = Math.ceil(total / limit) || 1
+
+  return (
+    <div>
+      <PageHeader title="Ratings" subtitle="Order ratings submitted by buyers"
+        action={<button onClick={reload} className="flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl text-slate-300 border border-white/10 hover:border-white/20 transition-all"><RefreshCw size={13} /> Refresh</button>} />
+
+      {error && <ErrorBox message={error} onRetry={reload} />}
+
+      <Card>
+        {loading ? <LoadingSpinner label="Loading ratings…" /> : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/[0.06]">
+                {['Order (Txn)', 'BAP', 'Target', 'Score', 'Date'].map(h => (
+                  <th key={h} className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(r => {
+                let range = r.range
+                try { if (typeof range === 'string') range = JSON.parse(range) } catch {}
+                const score = range?.value ?? range?.score ?? '?'
+                const max   = range?.max ?? 5
+                return (
+                  <tr key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                    <td className="px-5 py-3 font-mono text-slate-400">{r.transactionId ? r.transactionId.slice(0,8) + '…' : '—'}</td>
+                    <td className="px-5 py-3 text-slate-300 max-w-[140px] truncate">{r.bapId || '—'}</td>
+                    <td className="px-5 py-3 text-slate-400 max-w-[120px] truncate">{r.targetId || '—'}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: max }, (_, i) => (
+                          <Star key={i} size={11} className={i < score ? 'text-amber-400 fill-amber-400' : 'text-slate-700'} />
+                        ))}
+                        <span className="ml-1 text-slate-300 font-semibold">{score}/{max}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-slate-500">{fmtDateShort(r.createdAt)}</td>
+                  </tr>
+                )
+              })}
+              {!items.length && (
+                <tr><td colSpan={5} className="px-5 py-12 text-center text-slate-500">No ratings yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+        <Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} limit={limit} />
+      </Card>
+    </div>
+  )
+}
+
 // ─── App shell ────────────────────────────────────────────────────────────────
 
 const PAGES = {
@@ -1125,6 +1828,8 @@ const PAGES = {
   inventory: InventoryPage,
   publish:   PublishPage,
   messages:  MessagesPage,
+  support:   SupportPage,
+  ratings:   RatingsPage,
 }
 
 export default function App() {

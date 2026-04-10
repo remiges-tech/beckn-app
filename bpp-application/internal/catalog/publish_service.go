@@ -274,9 +274,15 @@ func upsertCatalog(ctx context.Context, q *dbsqlc.Queries, bppID, bppURI string,
 		DescriptorLongDesc:   strPtr(cat.Descriptor.LongDesc),
 		DescriptorDocs:       emptyJSONArray,
 		DescriptorMediaFiles: mediaJSON,
-		CatalogType:          catType,
-		ValidityStart:        pgtype.Timestamptz{},
-		ValidityEnd:          pgtype.Timestamptz{},
+		CatalogType:  catType,
+		ValidityStart: parseTimestamp(func() string {
+			if cat.Validity != nil { return cat.Validity.StartDate }
+			return ""
+		}()),
+		ValidityEnd: parseTimestamp(func() string {
+			if cat.Validity != nil { return cat.Validity.EndDate }
+			return ""
+		}()),
 	})
 }
 
@@ -310,6 +316,16 @@ func replaceResources(ctx context.Context, q *dbsqlc.Queries, bppID, catalogID s
 			ResourceAttributesType:    strPtr(attrsType),
 		}); err != nil {
 			return fmt.Errorf("insert resource %s: %w", res.ID, err)
+		}
+
+		// Upsert stock: even if StockQuantity == 0 we write a record so the
+		// dashboard can see the resource; a zero means "untracked / unlimited".
+		if err := q.UpsertResourceStock(ctx, dbsqlc.UpsertResourceStockParams{
+			ResourceID: res.ID,
+			BppID:      bppID,
+			Quantity:   res.StockQuantity,
+		}); err != nil {
+			return fmt.Errorf("upsert stock for resource %s: %w", res.ID, err)
 		}
 	}
 	return nil
