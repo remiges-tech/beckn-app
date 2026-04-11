@@ -884,7 +884,7 @@ const EMPTY_OFFER = () => ({
   timing_start: '09:00', timing_end: '21:00',
 })
 
-const CATALOG_TYPES  = ['', 'master', 'regular']
+const CATALOG_TYPES  = ['', 'regular']
 const ALL_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
 // Build resourceAttributes JSON-LD object from flat form fields.
@@ -895,8 +895,8 @@ function buildResourceAttrs(r) {
   if (!hasIdentity && !hasPhysical && !hasPkg) return undefined
 
   const attrs = {
-    '@context': 'https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailItem/v2.1/context.jsonld',
-    '@type': 'RetailItem',
+    '@context': 'https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailResource/v2.1/context.jsonld',
+    '@type': 'RetailResource',
   }
   if (hasIdentity) {
     attrs.identity = {}
@@ -926,21 +926,38 @@ function buildResourceAttrs(r) {
 }
 
 // Build offerAttributes JSON-LD from flat form fields.
+// Returns undefined when no meaningful attributes are set so the field is
+// omitted from the payload entirely (avoids sending a broken @context to CDS).
 function buildOfferAttrs(o) {
-  return {
-    '@context': o.offer_context,
-    '@type': 'RetailOffer',
-    policies: {
-      returns: { allowed: o.returns_allowed, ...(o.returns_allowed ? { window: o.returns_window, method: o.returns_method } : {}) },
-      cancellation: { allowed: o.cancel_allowed, ...(o.cancel_allowed ? { window: o.cancel_window, cutoffEvent: o.cancel_event } : {}) },
-      replacement: { allowed: o.replace_allowed, ...(o.replace_allowed ? { window: o.replace_window, method: o.replace_method, subjectToAvailability: o.replace_subject_avail } : {}) },
-    },
-    paymentConstraints: { codAvailable: o.cod_available },
-    serviceability: {
-      distanceConstraint: { maxDistance: Number(o.max_distance) || 15, unit: o.distance_unit },
-      timing: [{ daysOfWeek: o.timing_days, timeRange: { start: o.timing_start, end: o.timing_end } }],
-    },
+  const hasPolicies     = o.returns_allowed || o.cancel_allowed || o.replace_allowed
+  const hasPayment      = o.cod_available
+  const hasServiceability = o.max_distance || (o.timing_days && o.timing_days.length > 0)
+  const hasContext      = o.offer_context
+
+  if (!hasPolicies && !hasPayment && !hasServiceability && !hasContext) return undefined
+
+  const attrs = { '@type': 'RetailOffer' }
+  if (hasContext) attrs['@context'] = o.offer_context
+
+  if (hasPolicies) {
+    attrs.policies = {
+      returns:      { allowed: !!o.returns_allowed,  ...(o.returns_allowed  ? { window: o.returns_window,  method: o.returns_method } : {}) },
+      cancellation: { allowed: !!o.cancel_allowed,   ...(o.cancel_allowed   ? { window: o.cancel_window,   cutoffEvent: o.cancel_event } : {}) },
+      replacement:  { allowed: !!o.replace_allowed,  ...(o.replace_allowed  ? { window: o.replace_window,  method: o.replace_method, subjectToAvailability: !!o.replace_subject_avail } : {}) },
+    }
   }
+  if (hasPayment) attrs.paymentConstraints = { codAvailable: true }
+
+  if (hasServiceability) {
+    attrs.serviceability = {}
+    if (o.max_distance) {
+      attrs.serviceability.distanceConstraint = { maxDistance: Number(o.max_distance), unit: o.distance_unit || 'KM' }
+    }
+    if (o.timing_days && o.timing_days.length > 0) {
+      attrs.serviceability.timing = [{ daysOfWeek: o.timing_days, timeRange: { start: o.timing_start || '09:00', end: o.timing_end || '21:00' } }]
+    }
+  }
+  return attrs
 }
 
 function PublishPage({ onNav }) {
@@ -997,10 +1014,17 @@ function PublishPage({ onNav }) {
             id: o.id,
             descriptor: { name: o.name, shortDesc: o.short_desc },
             resourceIds: o.resource_ids.split(',').map(s => s.trim()).filter(Boolean),
-            ...(o.price ? { considerations: [{ id: `${o.id}-price`, status: { code: 'ACTIVE' },
-              considerationAttributes: JSON.stringify({ '@type': 'PriceSpecification', price: o.price, currency: o.currency }) }] } : {}),
+            ...(o.price ? { considerations: [{ id: `${o.id}-price`, status: { code: 'ACTIVE', name: 'ACTIVE' },
+              considerationAttributes: {
+                '@context': 'https://schema.beckn.io/RetailConsideration/v2.1/context.jsonld',
+                '@type': 'RetailConsideration',
+                currency: o.currency,
+                breakup: [{ title: o.name || o.id, amount: Number(o.price), type: 'BASE_PRICE' }],
+                totalAmount: Number(o.price),
+                paymentMethods: o.cod_available ? ['PREPAID', 'COD', 'UPI'] : ['PREPAID', 'UPI'],
+              } }] } : {}),
             ...(start ? { validity: { startDate: start, endDate: end } } : {}),
-            offerAttributes: offerAttrs,
+            ...(offerAttrs ? { offerAttributes: offerAttrs } : {}),
           }
         }),
         ...(form.catalog_type ? { publishDirectives: { catalogType: form.catalog_type } } : {}),

@@ -33,7 +33,54 @@ type BecknContext struct {
 }
 
 type BecknPublishMessage struct {
-	Catalogs []Catalog `json:"catalogs"`
+	Catalogs []CDSCatalog `json:"catalogs"`
+}
+
+// ---------------------------------------------------------------------------
+// CDS-safe types — mirrors Catalog/Resource/Offer but strips BPP-internal
+// fields (e.g. StockQuantity) that are not part of the Beckn catalog spec
+// and would cause the CDS to reject the payload.
+// ---------------------------------------------------------------------------
+
+// CDSCatalog intentionally excludes PublishDirectives — that is a BPP-internal
+// classification field; sending it (especially catalogType:"master") to the CDS
+// causes the catalog to be hidden from regular discover queries.
+type CDSCatalog struct {
+	ID         string        `json:"id"`
+	Descriptor Descriptor    `json:"descriptor"`
+	Provider   Provider      `json:"provider"`
+	Resources  []CDSResource `json:"resources,omitempty"`
+	Offers     []Offer       `json:"offers,omitempty"`
+	Validity   *TimePeriod   `json:"validity,omitempty"`
+}
+
+// CDSResource is identical to Resource but without the StockQuantity field,
+// which is a BPP-internal inventory concept unknown to the CDS.
+type CDSResource struct {
+	ID                 string          `json:"id"`
+	Descriptor         Descriptor      `json:"descriptor"`
+	ResourceAttributes json.RawMessage `json:"resourceAttributes,omitempty"`
+}
+
+// toCDSCatalog strips BPP-internal fields (StockQuantity, PublishDirectives)
+// from a Catalog before forwarding to the CDS.
+func toCDSCatalog(cat Catalog) CDSCatalog {
+	cdsResources := make([]CDSResource, len(cat.Resources))
+	for i, r := range cat.Resources {
+		cdsResources[i] = CDSResource{
+			ID:                 r.ID,
+			Descriptor:         r.Descriptor,
+			ResourceAttributes: r.ResourceAttributes,
+		}
+	}
+	return CDSCatalog{
+		ID:         cat.ID,
+		Descriptor: cat.Descriptor,
+		Provider:   cat.Provider,
+		Resources:  cdsResources,
+		Offers:     cat.Offers,
+		Validity:   cat.Validity,
+	}
 }
 
 // ---------------------------------------------------------------------------

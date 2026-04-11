@@ -16,14 +16,24 @@ const API_BASE = '/api/v1';
 /* ─────────────────────────── helpers ────────────────────────────────────── */
 
 function parseCatalogs(data) {
-  const products = [];
+  // Use a Map keyed by "bppId::resourceId" so that duplicate resources from
+  // overlapping discover results (re-indexing, multiple catalogs from the same
+  // BPP) are deduplicated. Last-write wins, which is fine — they're identical.
+  const seen = new Map();
+
   (data?.message?.catalogs || []).forEach(cat => {
     (cat.resources || []).forEach(res => {
+      if (!res?.id) return; // skip malformed entries
+
       // Find the offer that covers this resource
       const offer = cat.offers?.find(o => o.resourceIds?.includes(res.id)) || null;
-      const oa    = offer?.offerAttributes || {};
+
+      // Resources with no offer have no price — skip them to avoid blank cards.
+      if (!offer) return;
+
+      const oa    = offer.offerAttributes || {};
       const pa    = oa.price || {};
-      const cons  = offer?.considerations?.[0]?.considerationAttributes || {};
+      const cons  = offer.considerations?.[0]?.considerationAttributes || {};
 
       // Price: prefer considerations.totalAmount, fallback to offerAttributes.price.value
       let price    = cons.totalAmount ?? pa.value ?? 0;
@@ -45,7 +55,7 @@ function parseCatalogs(data) {
       }
 
       // Seller / provider
-      const provider      = offer?.provider || {};
+      const provider      = offer.provider || {};
       const sellerName    = provider.descriptor?.name || '';
       const sellerAddress = provider.availableAt?.[0]?.address;
 
@@ -55,7 +65,13 @@ function parseCatalogs(data) {
       const timing        = serviceability.timing?.[0] || {};
       const distance      = serviceability.distanceConstraint || {};
 
-      products.push({
+      // Composite dedup key: bpp + resource so cross-BPP resources with
+      // the same resource ID (unlikely but possible) are treated as distinct.
+      const bppId  = cat.bppId  || '';
+      const bppUri = cat.bppUri || '';
+      const dedupKey = `${bppId}::${res.id}`;
+
+      seen.set(dedupKey, {
         id: res.id,
         name: res.descriptor?.name || 'Unknown Product',
         shortDesc: res.descriptor?.shortDesc || '',
@@ -65,15 +81,13 @@ function parseCatalogs(data) {
         currency,
         image: res.descriptor?.mediaFile?.[0]?.uri ||
           'https://images.unsplash.com/photo-1542838132-92c53300491e?w=600&auto=format&fit=crop&q=70',
-        // Offer / provider info — needed for building Beckn select contract
-        offerId:      offer?.id || '',
-        offerName:    offer?.descriptor?.name || offer?.descriptor?.shortDesc || '',
+        offerId:      offer.id || '',
+        offerName:    offer.descriptor?.name || offer.descriptor?.shortDesc || '',
         providerId:   provider.id || '',
         sellerName,
-        // BPP identity from catalog — used to route the select to the correct BPP
-        bppId:        cat.bppId  || '',
-        bppUri:       cat.bppUri || '',
-        offerAttr:    oa,   // raw offerAttributes from discover — passed to select API
+        bppId,
+        bppUri,
+        offerAttr:    oa,
         breakup,
         sellerAddress,
         returnPolicy:   policies.returns,
@@ -82,11 +96,12 @@ function parseCatalogs(data) {
         deliveryRange:  distance.maxDistance ? `${distance.maxDistance} ${distance.unit || 'KM'}` : '',
         deliveryDays:   timing.daysOfWeek || [],
         deliveryHours:  timing.timeRange ? `${timing.timeRange.start}–${timing.timeRange.end}` : '',
-        offerValidity:  offer?.validity?.endDate ? new Date(offer.validity.endDate).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '',
+        offerValidity:  offer.validity?.endDate ? new Date(offer.validity.endDate).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '',
       });
     });
   });
-  return products;
+
+  return Array.from(seen.values());
 }
 
 // Parse the on_select contract from status polling to get the BPP-confirmed quote
@@ -1261,9 +1276,10 @@ export default function App() {
             <AnimatePresence>
               {visibleCatalog.map((product, i) => {
                 const inCart = cart.find(c => c.id === product.id);
+                const cardKey = `${product.bppId}::${product.id}`;
                 return (
                   <motion.div
-                    key={product.id} layout
+                    key={cardKey} layout
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.22, delay: i * 0.025 }}

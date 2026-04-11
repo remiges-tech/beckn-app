@@ -131,6 +131,11 @@ func (s *PublishService) forwardToCDS(ctx context.Context, txID uuid.UUID, req *
 	start := time.Now()
 	outboundMsgID := uuid.New()
 
+	cdsCatalogs := make([]CDSCatalog, len(req.Catalogs))
+	for i, c := range req.Catalogs {
+		cdsCatalogs[i] = toCDSCatalog(c)
+	}
+
 	becknReq := BecknPublishRequest{
 		Context: BecknContext{
 			Version:       "2.0.0",
@@ -142,7 +147,7 @@ func (s *PublishService) forwardToCDS(ctx context.Context, txID uuid.UUID, req *
 			BppURI:        s.cfg.BppURI,
 			NetworkID:     s.cfg.NetworkID,
 		},
-		Message: BecknPublishMessage{Catalogs: req.Catalogs},
+		Message: BecknPublishMessage{Catalogs: cdsCatalogs},
 	}
 
 	becknReqJSON, _ := json.Marshal(becknReq)
