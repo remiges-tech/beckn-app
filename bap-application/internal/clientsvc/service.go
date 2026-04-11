@@ -629,14 +629,24 @@ func (s *ClientService) Cancel(ctx context.Context, req *ClientCancelRequest) er
 		return fmt.Errorf("no snapshot for txn %s: %w", txnID, err)
 	}
 
-	var contract map[string]interface{}
-	if err := json.Unmarshal(snapshot.Contract, &contract); err != nil {
-		return fmt.Errorf("parse contract snapshot: %w", err)
+	// Extract the full contract from the snapshot so the adapter gets
+	// the required `commitments` array and other required fields.
+	var contractEnvelope struct {
+		Message struct {
+			Contract json.RawMessage `json:"contract"`
+		} `json:"message"`
 	}
-	contractID, _ := contract["id"].(string)
+	var contractPayload json.RawMessage
+	if err := json.Unmarshal(snapshot.Contract, &contractEnvelope); err == nil &&
+		len(contractEnvelope.Message.Contract) > 2 {
+		contractPayload = contractEnvelope.Message.Contract
+	} else {
+		// Snapshot already IS the contract object (not wrapped in message)
+		contractPayload = snapshot.Contract
+	}
 
 	msgJSON, _ := json.Marshal(map[string]interface{}{
-		"contract": map[string]string{"id": contractID},
+		"contract": json.RawMessage(contractPayload),
 	})
 	becknReq := BecknRequest{
 		Context: s.newContext("cancel", req.TransactionID, msgID.String(), bppID, bppURI),
@@ -697,7 +707,44 @@ func (s *ClientService) Rate(ctx context.Context, req *ClientRateRequest) error 
 	}
 	bppID, bppURI := s.resolveBPP(txn)
 
-	msgJSON, _ := json.Marshal(map[string]interface{}{"ratingInputs": req.RatingInputs})
+	// Resolve the contract ID from the latest snapshot so ratingInputs[].id
+	// references the actual contract, not the transaction.
+	contractID := req.TransactionID // fallback
+	if snap, err := q.GetLatestContractSnapshot(ctx, txnID); err == nil {
+		var env struct {
+			Message struct {
+				Contract struct {
+					ID string `json:"id"`
+				} `json:"contract"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(snap.Contract, &env) == nil && env.Message.Contract.ID != "" {
+			contractID = env.Message.Contract.ID
+		}
+	}
+
+	// Build rating inputs, omitting null feedbackFormSubmission to avoid
+	// adapter parsing errors ("MessageID: %!s(<nil>)").
+	type ratingInputWire struct {
+		ID               string      `json:"id"`
+		RatingCategory   string      `json:"ratingCategory"`
+		Range            interface{} `json:"range"`
+		FeedbackForm     interface{} `json:"feedbackFormSubmission,omitempty"`
+	}
+	inputs := make([]ratingInputWire, 0, len(req.RatingInputs))
+	for _, ri := range req.RatingInputs {
+		w := ratingInputWire{
+			ID:             contractID,
+			RatingCategory: ri.RatingCategory,
+			Range:          ri.Range,
+		}
+		if ri.FeedbackFormSubmission != nil {
+			w.FeedbackForm = ri.FeedbackFormSubmission
+		}
+		inputs = append(inputs, w)
+	}
+
+	msgJSON, _ := json.Marshal(map[string]interface{}{"ratingInputs": inputs})
 	becknReq := BecknRequest{
 		Context: s.newContext("rate", req.TransactionID, msgID.String(), bppID, bppURI),
 		Message: json.RawMessage(msgJSON),

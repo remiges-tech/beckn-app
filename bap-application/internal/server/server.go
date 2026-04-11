@@ -69,5 +69,7 @@ func RegisterRoutes(r *gin.Engine, pool *pgxpool.Pool, cfg *config.Config, lh *l
 		v1.POST("/update", clientH.HandleUpdate)
 		v1.POST("/rate", clientH.HandleRate)
 		v1.POST("/support", clientH.HandleSupport)
+		v1.GET("/orders", clientH.HandleListOrders)
+		v1.GET("/orders/:id", clientH.HandleGetOrder)
 	}
 }

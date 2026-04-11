@@ -39,3 +39,28 @@ FROM contract_snapshots
 WHERE transaction_id = $1
 ORDER BY created_at DESC
 LIMIT 1;
+
+-- name: ListTransactions :many
+-- Returns paginated transactions newest-first, with their latest contract snapshot.
+SELECT
+    t.transaction_id,
+    t.bpp_id,
+    t.bpp_uri,
+    t.status,
+    t.created_at,
+    t.updated_at,
+    cs.contract,
+    cs.action AS latest_action
+FROM transactions t
+LEFT JOIN LATERAL (
+    SELECT contract, action
+    FROM contract_snapshots
+    WHERE transaction_id = t.transaction_id
+    ORDER BY created_at DESC
+    LIMIT 1
+) cs ON true
+ORDER BY t.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountTransactions :one
+SELECT COUNT(*) FROM transactions;

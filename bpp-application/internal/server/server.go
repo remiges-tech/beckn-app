@@ -156,10 +156,21 @@ func registerDashboardRoutes(v1 *gin.RouterGroup, pool *pgxpool.Pool, cfg *confi
 	inv.GET("/resources", h.HandleListResources)
 	inv.GET("/offers", h.HandleListOffers)
 	inv.GET("/stock", h.HandleListStock)
+	inv.GET("/items", h.HandleInventoryItems)
 
 	v1.GET("/messages", h.HandleListMessages)
 	v1.GET("/support-tickets", h.HandleListSupportTickets)
 	v1.GET("/ratings", h.HandleListRatings)
+
+	// Catalog management
+	v1.GET("/providers", h.HandleListProviders)
+	v1.GET("/catalogs", h.HandleListCatalogs)
+	v1.POST("/catalogs", h.HandleCreateCatalog)
+	v1.GET("/catalogs/:id", h.HandleGetCatalog)
+	v1.GET("/catalogs/:id/resources", h.HandleGetCatalogResources)
+	v1.POST("/catalogs/:id/products", h.HandleAddProduct)
+	v1.POST("/catalogs/:id/offers", h.HandleAddOffer)
+	v1.POST("/catalogs/:id/publish", h.HandlePublishCatalog)
 }
 
 func registerBecknCatalogRoutes(svc *service.Service, g *gin.RouterGroup) {

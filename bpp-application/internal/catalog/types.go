@@ -62,9 +62,9 @@ type CDSResource struct {
 	ResourceAttributes json.RawMessage `json:"resourceAttributes,omitempty"`
 }
 
-// toCDSCatalog strips BPP-internal fields (StockQuantity, PublishDirectives)
-// from a Catalog before forwarding to the CDS.
-func toCDSCatalog(cat Catalog) CDSCatalog {
+// ToCDSCatalog strips BPP-internal fields (StockQuantity, PublishDirectives)
+// from a Catalog before forwarding to the CDS. Exported for use by dashboardsvc.
+func ToCDSCatalog(cat Catalog) CDSCatalog {
 	cdsResources := make([]CDSResource, len(cat.Resources))
 	for i, r := range cat.Resources {
 		cdsResources[i] = CDSResource{

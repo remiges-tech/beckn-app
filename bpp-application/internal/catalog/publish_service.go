@@ -133,7 +133,7 @@ func (s *PublishService) forwardToCDS(ctx context.Context, txID uuid.UUID, req *
 
 	cdsCatalogs := make([]CDSCatalog, len(req.Catalogs))
 	for i, c := range req.Catalogs {
-		cdsCatalogs[i] = toCDSCatalog(c)
+		cdsCatalogs[i] = ToCDSCatalog(c)
 	}
 
 	becknReq := BecknPublishRequest{

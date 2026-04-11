@@ -10,7 +10,19 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countTransactions = `-- name: CountTransactions :one
+SELECT COUNT(*) FROM transactions
+`
+
+func (q *Queries) CountTransactions(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTransactions)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const getContractSnapshot = `-- name: GetContractSnapshot :one
 SELECT id, transaction_id, action, contract_id, contract, created_at, updated_at
@@ -85,6 +97,74 @@ func (q *Queries) GetTransaction(ctx context.Context, transactionID uuid.UUID) (
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listTransactions = `-- name: ListTransactions :many
+SELECT
+    t.transaction_id,
+    t.bpp_id,
+    t.bpp_uri,
+    t.status,
+    t.created_at,
+    t.updated_at,
+    cs.contract,
+    cs.action AS latest_action
+FROM transactions t
+LEFT JOIN LATERAL (
+    SELECT contract, action
+    FROM contract_snapshots
+    WHERE transaction_id = t.transaction_id
+    ORDER BY created_at DESC
+    LIMIT 1
+) cs ON true
+ORDER BY t.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListTransactionsParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListTransactionsRow struct {
+	TransactionID uuid.UUID          `json:"transaction_id"`
+	BppID         *string            `json:"bpp_id"`
+	BppUri        *string            `json:"bpp_uri"`
+	Status        TransactionStatus  `json:"status"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	Contract      json.RawMessage    `json:"contract"`
+	LatestAction  BecknAction        `json:"latest_action"`
+}
+
+// Returns paginated transactions newest-first, with their latest contract snapshot.
+func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]ListTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, listTransactions, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTransactionsRow{}
+	for rows.Next() {
+		var i ListTransactionsRow
+		if err := rows.Scan(
+			&i.TransactionID,
+			&i.BppID,
+			&i.BppUri,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Contract,
+			&i.LatestAction,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const upsertContractSnapshot = `-- name: UpsertContractSnapshot :exec

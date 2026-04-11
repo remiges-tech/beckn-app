@@ -7,6 +7,7 @@ import {
   Star, Info, Receipt, Store, MapPin, Calendar, Zap,
   User, Phone, Home, ChevronLeft, Banknote,
   Ban, MessageSquare, RefreshCw, ThumbsUp,
+  History, Wand2, ExternalLink, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 // BPP target, network ID, and BAP identity are all server-side config (BAP .env).
@@ -599,7 +600,18 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
               className="rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden">
               <div className="px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.07] flex items-center gap-2">
                 <User className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Billing Details</span>
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex-1">Billing Details</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const profile = BILLING_PROFILES[_billingIdx % BILLING_PROFILES.length];
+                    _billingIdx++;
+                    setBilling(profile);
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors"
+                >
+                  <Wand2 className="w-3 h-3" /> Auto-fill
+                </button>
               </div>
               <div className="px-4 py-3 space-y-3">
                 <div className="relative">
@@ -608,7 +620,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
                     type="text" placeholder="Full name"
                     value={billing.name}
                     onChange={e => setBilling(p => ({ ...p, name: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                 </div>
                 <div className="relative">
@@ -617,7 +629,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
                     type="tel" placeholder="Phone number"
                     value={billing.phone}
                     onChange={e => setBilling(p => ({ ...p, phone: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                 </div>
                 <div className="relative">
@@ -626,7 +638,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
                     type="email" placeholder="Email address"
                     value={billing.email}
                     onChange={e => setBilling(p => ({ ...p, email: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                 </div>
                 <div className="relative">
@@ -635,35 +647,35 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
                     type="text" placeholder="Street address"
                     value={billing.streetAddress}
                     onChange={e => setBilling(p => ({ ...p, streetAddress: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="text" placeholder="City"
                     value={billing.addressLocality}
                     onChange={e => setBilling(p => ({ ...p, addressLocality: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                   <input
                     type="text" placeholder="State"
                     value={billing.addressRegion}
                     onChange={e => setBilling(p => ({ ...p, addressRegion: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="text" placeholder="Pincode"
                     value={billing.postalCode}
                     onChange={e => setBilling(p => ({ ...p, postalCode: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                   <input
                     type="text" placeholder="Country (e.g. IN)"
                     value={billing.addressCountry}
                     onChange={e => setBilling(p => ({ ...p, addressCountry: e.target.value }))}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/40 transition-colors"
                   />
                 </div>
               </div>
@@ -745,7 +757,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
             </div>
 
             {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button onClick={onRequestStatus}
                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/20 hover:bg-blue-500/20 transition-all">
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh Status
@@ -756,7 +768,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button onClick={() => { setShowRatingForm(v => !v); setShowSupportForm(false); }}
                 className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-all">
                 <Star className="w-3.5 h-3.5" /> Rate Order
@@ -778,7 +790,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
                     value={ratingFeedback} onChange={e => setRatingFeedback(e.target.value)}
                     placeholder="Optional feedback…"
                     rows={2}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 outline-none resize-none"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 outline-none resize-none"
                   />
                   <button
                     disabled={!ratingValue || isLoading}
@@ -805,7 +817,7 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
                     value={supportDesc} onChange={e => setSupportDesc(e.target.value)}
                     placeholder="What do you need help with?"
                     rows={3}
-                    className="w-full bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 outline-none resize-none"
+                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 outline-none resize-none"
                   />
                   <button
                     disabled={!supportDesc.trim() || isLoading}
@@ -874,6 +886,441 @@ function CheckoutFlow({ cart, cartTotal, transaction, billing, setBilling, isLoa
   );
 }
 
+/* ─────────────────── Sample billing profiles ───────────────────────────── */
+
+const BILLING_PROFILES = [
+  {
+    name: 'Arjun Sharma',
+    email: 'arjun.sharma@example.in',
+    phone: '+919876543210',
+    streetAddress: '42 MG Road, Koramangala',
+    addressLocality: 'Bengaluru',
+    addressRegion: 'Karnataka',
+    postalCode: '560034',
+    addressCountry: 'IN',
+  },
+  {
+    name: 'Priya Nair',
+    email: 'priya.nair@example.in',
+    phone: '+917012345678',
+    streetAddress: '15 Marine Drive, Fort',
+    addressLocality: 'Mumbai',
+    addressRegion: 'Maharashtra',
+    postalCode: '400001',
+    addressCountry: 'IN',
+  },
+  {
+    name: 'Reza Pratama',
+    email: 'reza.pratama@example.id',
+    phone: '+6281234567890',
+    streetAddress: 'Jl. Sudirman No. 52, Senayan',
+    addressLocality: 'Jakarta',
+    addressRegion: 'DKI Jakarta',
+    postalCode: '10270',
+    addressCountry: 'ID',
+  },
+];
+let _billingIdx = 0;
+
+/* ─────────────────── Order History Drawer ──────────────────────────────── */
+
+const STATUS_COLORS = {
+  CONFIRMED:     { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
+  CANCELLED:     { bg: 'bg-rose-500/10',    text: 'text-rose-400',    border: 'border-rose-500/20'    },
+  INIT_SENT:     { bg: 'bg-blue-500/10',    text: 'text-blue-400',    border: 'border-blue-500/20'    },
+  CONFIRM_SENT:  { bg: 'bg-amber-500/10',   text: 'text-amber-400',   border: 'border-amber-500/20'   },
+  CANCEL_SENT:   { bg: 'bg-rose-500/10',    text: 'text-rose-400',    border: 'border-rose-500/20'    },
+};
+
+function fmtOrderDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return iso; }
+}
+
+/* ── helpers to parse contract data ─────────────────────────────────────── */
+
+function parseContractDetail(contract) {
+  if (!contract || typeof contract !== 'object') return null;
+
+  // Commitments → items
+  const commitments = contract.commitments || [];
+  const items = commitments.map(c => ({
+    id:       c.id || '',
+    name:     c.descriptor?.name || c.offer?.descriptor?.name || c.id || 'Item',
+    qty:      c.quantity?.count ?? 1,
+    offerId:  c.offer?.id || '',
+    resourceId: c.offer?.resourceIds?.[0] || '',
+  }));
+
+  // Consideration → price
+  const consideration = (contract.consideration || [])[0];
+  const consAttr = consideration?.considerationAttributes || {};
+  const price    = consAttr.totalAmount ?? null;
+  const currency = consAttr.currency || 'INR';
+  const breakup  = consAttr.breakup || [];
+
+  // Participants
+  const participants = contract.participants || [];
+  const buyer  = participants.find(p => p.role?.code === 'BUYER'  || p.role === 'BUYER');
+  const seller = participants.find(p => p.role?.code === 'SELLER' || p.role === 'SELLER');
+
+  // Status
+  const statusCode = contract.status?.code || '';
+
+  return { items, price, currency, breakup, buyer, seller, statusCode, id: contract.id };
+}
+
+const ACTION_LABELS = {
+  select:     { icon: '🔍', label: 'Item Selected',    color: 'text-cyan-400'    },
+  on_select:  { icon: '💬', label: 'Quote Received',   color: 'text-blue-400'    },
+  init:       { icon: '📋', label: 'Order Initialised', color: 'text-indigo-400' },
+  on_init:    { icon: '✅', label: 'Order Confirmed',   color: 'text-emerald-400' },
+  confirm:    { icon: '🛒', label: 'Confirm Sent',      color: 'text-amber-400'   },
+  on_confirm: { icon: '🎉', label: 'Order Placed',      color: 'text-emerald-400' },
+  cancel:     { icon: '🚫', label: 'Cancel Requested',  color: 'text-rose-400'    },
+  on_cancel:  { icon: '❌', label: 'Order Cancelled',   color: 'text-rose-400'    },
+  rate:       { icon: '⭐', label: 'Rated',             color: 'text-amber-400'   },
+  on_rate:    { icon: '⭐', label: 'Rating Confirmed',  color: 'text-amber-400'   },
+  on_status:  { icon: '📊', label: 'Status Update',     color: 'text-slate-400'   },
+};
+
+function OrderDetailPanel({ txnId, onBack }) {
+  const [detail, setDetail]   = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    setLoading(true); setError(null);
+    fetch(`${API_BASE}/orders/${txnId}`)
+      .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e.error || 'Failed')))
+      .then(d => { setDetail(d); setLoading(false); })
+      .catch(e => { setError(String(e)); setLoading(false); });
+  }, [txnId]);
+
+  if (loading) return (
+    <div className="flex-1 flex items-center justify-center">
+      <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500 px-6">
+      <Package className="w-10 h-10 opacity-20" />
+      <p className="text-sm text-center">{error}</p>
+    </div>
+  );
+
+  const sc = STATUS_COLORS[detail.status] || { bg: 'bg-slate-700/30', text: 'text-slate-400', border: 'border-slate-600/30' };
+
+  // Best contract: latest snapshot with most data
+  let bestContract = null;
+  const snaps = (detail.snapshots || []);
+  for (const s of [...snaps].reverse()) {
+    const parsed = parseContractDetail(s.contract);
+    if (parsed && (parsed.items.length > 0 || parsed.price !== null)) {
+      bestContract = parsed;
+      break;
+    }
+  }
+  // Fallback to top-level contract
+  if (!bestContract) bestContract = parseContractDetail(detail.contract);
+
+  const fmt = (amount, cur) => {
+    if (amount == null) return '—';
+    try { return new Intl.NumberFormat('en-IN', { style: 'currency', currency: cur || 'INR', maximumFractionDigits: 0 }).format(amount); }
+    catch { return `${cur || 'INR'} ${amount}`; }
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+
+      {/* Status banner */}
+      <div className={`rounded-xl px-4 py-3 flex items-center gap-3 border ${sc.bg} ${sc.border}`}>
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${sc.bg} border ${sc.border}`}>
+          {detail.status === 'CONFIRMED' || detail.status === 'on_confirm'
+            ? <CheckCircle2 className={`w-5 h-5 ${sc.text}`} />
+            : detail.status.includes('CANCEL')
+            ? <Ban className={`w-5 h-5 ${sc.text}`} />
+            : <Package className={`w-5 h-5 ${sc.text}`} />
+          }
+        </div>
+        <div>
+          <p className={`text-sm font-bold ${sc.text}`}>{detail.status.replace(/_/g, ' ')}</p>
+          <p className="text-[10px] text-slate-500">{fmtOrderDate(detail.updated_at)}</p>
+        </div>
+      </div>
+
+      {/* IDs */}
+      <div className="rounded-xl border border-white/[0.07] px-4 py-3 space-y-2" style={{ background: 'rgba(255,255,255,0.02)' }}>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Transaction</p>
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[11px] text-slate-500 shrink-0">Txn ID</span>
+          <span className="text-[11px] font-mono text-slate-300 break-all text-right">{detail.transaction_id}</span>
+        </div>
+        {bestContract?.id && (
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[11px] text-slate-500 shrink-0">Contract ID</span>
+            <span className="text-[11px] font-mono text-slate-300 break-all text-right">{bestContract.id}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Items */}
+      {bestContract?.items?.length > 0 && (
+        <div className="rounded-xl border border-white/[0.07] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center gap-2">
+            <ShoppingCart className="w-3.5 h-3.5 text-slate-500" />
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Items Ordered</p>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {bestContract.items.map((item, i) => (
+              <div key={i} className="px-4 py-2.5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                  <Package className="w-3.5 h-3.5 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{item.name}</p>
+                  {item.resourceId && <p className="text-[10px] font-mono text-slate-600 truncate">{item.resourceId}</p>}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-slate-400">×{item.qty}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Price / Breakup */}
+      {bestContract?.price !== null && bestContract?.price !== undefined && (
+        <div className="rounded-xl border border-white/[0.07] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center gap-2">
+            <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Payment</p>
+          </div>
+          <div className="px-4 py-3 space-y-1.5">
+            {bestContract.breakup.map((b, i) => (
+              <div key={i} className="flex justify-between text-xs">
+                <span className="text-slate-400">{b.title}</span>
+                <span className={b.amount < 0 ? 'text-emerald-400' : 'text-slate-300'}>{fmt(b.amount, bestContract.currency)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between pt-2 border-t border-white/[0.06]">
+              <span className="text-sm font-bold text-white">Total</span>
+              <span className="text-sm font-bold text-emerald-300">{fmt(bestContract.price, bestContract.currency)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Buyer / Seller */}
+      {(bestContract?.buyer || bestContract?.seller) && (
+        <div className="rounded-xl border border-white/[0.07] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center gap-2">
+            <User className="w-3.5 h-3.5 text-slate-500" />
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Participants</p>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {[bestContract.buyer && { role: 'Buyer', p: bestContract.buyer }, bestContract.seller && { role: 'Seller', p: bestContract.seller }].filter(Boolean).map(({ role, p }) => (
+              <div key={role} className="px-4 py-2.5">
+                <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">{role}</p>
+                <p className="text-sm text-white font-medium">{p.descriptor?.name || p.contact?.name || '—'}</p>
+                {p.contact?.phone && <p className="text-xs text-slate-400">{p.contact.phone}</p>}
+                {p.contact?.email && <p className="text-xs text-slate-400">{p.contact.email}</p>}
+                {p.location?.address && <p className="text-xs text-slate-500 mt-0.5">{p.location.address}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Timeline */}
+      {snaps.length > 0 && (
+        <div className="rounded-xl border border-white/[0.07] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5 text-slate-500" />
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Order Timeline</p>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            {snaps.map((s, i) => {
+              const al = ACTION_LABELS[s.action] || { icon: '•', label: s.action, color: 'text-slate-500' };
+              return (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-base bg-slate-800 border border-white/[0.07] ${al.color}`}>
+                      {al.icon}
+                    </div>
+                    {i < snaps.length - 1 && <div className="w-px h-4 bg-white/[0.06] mt-1" />}
+                  </div>
+                  <div className="flex-1 pb-1">
+                    <p className={`text-xs font-semibold ${al.color}`}>{al.label}</p>
+                    <p className="text-[10px] text-slate-600">{fmtOrderDate(s.created_at)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrderHistoryDrawer({ open, onClose }) {
+  const [orders, setOrders]       = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [total, setTotal]         = useState(0);
+  const [page, setPage]           = useState(1);
+  const [selectedId, setSelectedId] = useState(null);
+  const limit = 10;
+
+  const load = useCallback(async (p = 1) => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/orders?page=${p}&limit=${limit}`);
+      if (!r.ok) throw new Error(await r.text());
+      const d = await r.json();
+      setOrders(d.items || []);
+      setTotal(d.total || 0);
+      setPage(p);
+    } catch (e) {
+      console.error('orders fetch', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) { load(1); setSelectedId(null); }
+  }, [open, load]);
+
+  const totalPages = Math.ceil(total / limit);
+  const statusStyle = (s) => STATUS_COLORS[s] || { bg: 'bg-slate-700/40', text: 'text-slate-400', border: 'border-slate-600/30' };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
+          <motion.aside
+            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed right-0 top-0 h-full w-full max-w-md glass z-50 flex flex-col shadow-2xl overflow-hidden"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07] shrink-0">
+              <div className="flex items-center gap-2">
+                {selectedId ? (
+                  <button onClick={() => setSelectedId(null)} className="text-slate-400 hover:text-white transition-colors mr-1">
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                ) : null}
+                <History className="w-5 h-5 text-cyan-400" />
+                <h2 className="text-lg font-bold text-white">
+                  {selectedId ? 'Order Detail' : 'Order History'}
+                </h2>
+                {!selectedId && total > 0 && (
+                  <span className="bg-cyan-500/20 text-cyan-400 text-xs font-bold px-2 py-0.5 rounded-full">{total}</span>
+                )}
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Detail panel */}
+            <AnimatePresence mode="wait">
+              {selectedId ? (
+                <motion.div key="detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                  className="flex-1 flex flex-col overflow-hidden">
+                  <OrderDetailPanel txnId={selectedId} onBack={() => setSelectedId(null)} />
+                </motion.div>
+              ) : (
+                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="flex-1 flex flex-col overflow-hidden">
+
+                  {/* Order list */}
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                    {loading && (
+                      <div className="flex items-center justify-center py-16">
+                        <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+                      </div>
+                    )}
+
+                    {!loading && orders.length === 0 && (
+                      <div className="flex flex-col items-center gap-3 py-20 text-slate-500">
+                        <Package className="w-12 h-12 opacity-20" />
+                        <p className="text-sm">No orders yet</p>
+                        <p className="text-xs opacity-60">Your placed orders will appear here</p>
+                      </div>
+                    )}
+
+                    {!loading && orders.map(order => {
+                      const sc = statusStyle(order.status);
+                      return (
+                        <button key={order.transaction_id}
+                          onClick={() => setSelectedId(order.transaction_id)}
+                          className="w-full text-left rounded-xl border border-white/[0.07] px-4 py-3 flex items-center gap-3 hover:bg-white/[0.04] active:scale-[0.99] transition-all"
+                          style={{ background: 'rgba(255,255,255,0.025)' }}>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${sc.bg}`}>
+                            <Package className={`w-4 h-4 ${sc.text}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-semibold text-white truncate">
+                                {order.item_name || 'Order #' + order.transaction_id.slice(0, 8)}
+                              </p>
+                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
+                                {order.status.replace(/_/g,' ')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                              {order.item_price > 0 && (
+                                <span className="text-xs font-semibold text-emerald-300">
+                                  {order.currency} {order.item_price.toLocaleString()}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-600">
+                                <Clock className="inline w-2.5 h-2.5 mr-0.5" />{fmtOrderDate(order.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="shrink-0 flex items-center justify-between px-5 py-3 border-t border-white/[0.06]">
+                      <button onClick={() => load(page - 1)} disabled={page <= 1}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 border border-white/[0.08] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                        ← Prev
+                      </button>
+                      <span className="text-xs text-slate-500">Page {page} / {totalPages}</span>
+                      <button onClick={() => load(page + 1)} disabled={page >= totalPages}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 border border-white/[0.08] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                        Next →
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 /* ─────────────────────────── App ────────────────────────────────────────── */
 export default function App() {
   const [catalog, setCatalog]           = useState([]);
@@ -882,6 +1329,7 @@ export default function App() {
   const [cart, setCart]                 = useState([]);
   const [transaction, setTransaction]   = useState(null);
   const [isLoading, setIsLoading]       = useState(false);
+  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isCartOpen, setIsCartOpen]     = useState(false);
   const [cartCheckout, setCartCheckout] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -948,7 +1396,14 @@ export default function App() {
     const id = setInterval(() => {
       fetch(`${API_BASE}/status/${transaction.id}`)
         .then(r => r.json())
-        .then(d => { setTransaction(p => ({ ...p, ...d })); })
+        .then(d => {
+          setTransaction(p => {
+            // Don't revert CANCEL_SENT back to CONFIRMED — the cancel is still
+            // in-flight. Only advance to CANCELLED or later states.
+            if (p.status === 'CANCEL_SENT' && d.status === 'CONFIRMED') return p;
+            return { ...p, ...d };
+          });
+        })
         .catch(() => {});
     }, 2000);
     return () => clearInterval(id);
@@ -1068,10 +1523,14 @@ export default function App() {
     if (!window.confirm('Cancel this order?')) return;
     setIsLoading(true);
     try {
-      await fetch(`${API_BASE}/cancel`, {
+      const r = await fetch(`${API_BASE}/cancel`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transaction_id: transaction.id }),
       });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: r.statusText }));
+        throw new Error(err.error || 'Cancel request failed');
+      }
       setTransaction(p => ({ ...p, status: 'CANCEL_SENT' }));
     } catch (e) { alert('Cancel failed: ' + e.message); }
     finally { setIsLoading(false); }
@@ -1082,18 +1541,25 @@ export default function App() {
     if (!transaction) return;
     setIsLoading(true);
     try {
-      await fetch(`${API_BASE}/rate`, {
+      const ratingInput = {
+        id: transaction.id,
+        ratingCategory: 'order',
+        range: { min: 1, max: 5, value: rating },
+      };
+      if (feedback && feedback.trim()) {
+        ratingInput.feedbackFormSubmission = { data: { comment: feedback.trim() } };
+      }
+      const r = await fetch(`${API_BASE}/rate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transaction_id: transaction.id,
-          ratingInputs: [{
-            id: transaction.id,
-            ratingCategory: 'order',
-            range: { min: 1, max: 5, value: rating },
-            feedbackFormSubmission: feedback ? { data: { comment: feedback } } : null,
-          }],
+          ratingInputs: [ratingInput],
         }),
       });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: r.statusText }));
+        throw new Error(err.error || 'Rating submission failed');
+      }
       setTransaction(p => ({ ...p, rated: rating }));
     } catch (e) { alert('Rating failed: ' + e.message); }
     finally { setIsLoading(false); }
@@ -1165,6 +1631,14 @@ export default function App() {
           </form>
 
           <button
+            onClick={() => setIsOrdersOpen(true)}
+            className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl transition-all text-sm font-medium text-slate-400 hover:text-white border border-white/[0.08] hover:border-white/[0.15]"
+          >
+            <History className="w-4 h-4" />
+            <span className="hidden sm:block">Orders</span>
+          </button>
+
+          <button
             onClick={() => setIsCartOpen(true)}
             className="relative shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-medium text-white"
             style={{ background: 'rgba(0,184,230,0.15)', border: '1px solid rgba(0,184,230,0.3)' }}
@@ -1205,7 +1679,7 @@ export default function App() {
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value)}
-              className="shrink-0 bg-white/[0.06] border border-white/[0.08] text-slate-300 text-xs rounded-xl px-3 py-1.5 outline-none focus:border-white/20 cursor-pointer"
+              className="shrink-0 bg-slate-900 border border-white/[0.08] text-slate-300 text-xs rounded-xl px-3 py-1.5 outline-none focus:border-white/20 cursor-pointer"
             >
               <option value="default">Relevance</option>
               <option value="price_asc">Price: Low → High</option>
@@ -1429,6 +1903,9 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* ── Order History Drawer ─────────────────────────────────────────── */}
+      <OrderHistoryDrawer open={isOrdersOpen} onClose={() => setIsOrdersOpen(false)} />
 
       {/* ── Cart Drawer ───────────────────────────────────────────────────── */}
       <AnimatePresence>

@@ -6,7 +6,8 @@ import {
   RefreshCw, X, ChevronLeft, ChevronRight as ChevronRightIcon,
   Upload, Plus, Trash2, Eye, ArrowUpRight, Filter, Search,
   Activity, Zap, Store, Calendar, Tag, BarChart2, Inbox,
-  ArrowRight, Circle, Star, Ticket, Ban,
+  ArrowRight, Circle, Star, Ticket, Ban, Wand2,
+  BookOpen, FolderOpen, Send, ArrowLeft,
 } from 'lucide-react'
 
 const API_BASE = '/api/v1'
@@ -134,42 +135,48 @@ const NAV_ITEMS = [
   { id: 'overview',  label: 'Overview',        icon: LayoutDashboard, desc: 'Stats & insights' },
   { id: 'orders',    label: 'Orders',           icon: ShoppingBag,     desc: 'Manage contracts' },
   { id: 'inventory', label: 'Inventory',        icon: Package,         desc: 'Resources & offers' },
-  { id: 'publish',   label: 'Publish Catalog',  icon: Radio,           desc: 'Push to network' },
+  { id: 'catalogs',  label: 'Catalogs',         icon: BookOpen,        desc: 'Manage & publish' },
   { id: 'messages',  label: 'Message Log',      icon: MessageSquare,   desc: 'Protocol audit' },
   { id: 'support',   label: 'Support Tickets',  icon: Ticket,          desc: 'Customer support' },
   { id: 'ratings',   label: 'Ratings',          icon: Star,            desc: 'Order ratings' },
 ]
 
-function Sidebar({ active, onNav }) {
-  return (
-    <aside className="fixed inset-y-0 left-0 z-40 flex flex-col w-64 border-r border-white/[0.06]"
-      style={{ background: '#0a0e1a' }}>
+function Sidebar({ active, onNav, open, onClose }) {
+  const navContent = (
+    <>
       {/* Logo */}
-      <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
-        <img
-          src="https://remiges.tech/wp-content/uploads/2024/04/Remiges-logo-2048x403.png"
-          alt="Remiges" className="h-6 w-auto"
-          style={{ filter: 'brightness(0) invert(1)', opacity: 0.85 }}
-        />
-        <div className="mt-3 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <p className="text-[10px] text-slate-500 font-medium">BPP Admin · ION Network</p>
+      <div className="px-5 pt-5 pb-4 border-b border-white/[0.06] flex items-center justify-between">
+        <div>
+          <img
+            src="https://remiges.tech/wp-content/uploads/2024/04/Remiges-logo-2048x403.png"
+            alt="Remiges" className="h-6 w-auto"
+            style={{ filter: 'brightness(0) invert(1)', opacity: 0.85 }}
+          />
+          <div className="mt-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <p className="text-[10px] text-slate-500 font-medium">BPP Admin · ION Network</p>
+          </div>
         </div>
+        {onClose && (
+          <button onClick={onClose} className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-white">
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map(({ id, label, icon: Icon, desc }) => {
-          const isActive = active === id
+          const isActive = active === id || (id === 'catalogs' && ['catalog_detail','create_catalog','add_product'].includes(active))
           return (
-            <button key={id} onClick={() => onNav(id)}
+            <button key={id} onClick={() => { onNav(id); onClose?.() }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-                isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
               style={isActive ? { background: 'rgba(0,184,230,0.12)', border: '1px solid rgba(0,184,230,0.25)' } : {}}
             >
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-                isActive ? '' : 'bg-white/[0.04] group-hover:bg-white/[0.07]'
+                isActive ? '' : 'bg-slate-900 group-hover:bg-white/[0.07]'
               }`}
                 style={isActive ? { background: 'rgba(0,184,230,0.2)' } : {}}>
                 <Icon size={15} style={isActive ? { color: '#00b8e6' } : {}} />
@@ -188,7 +195,28 @@ function Sidebar({ active, onNav }) {
       <div className="px-4 py-3 border-t border-white/[0.06]">
         <p className="text-[10px] text-slate-600">Beckn Protocol v2.0 · ION Retail</p>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col w-64 border-r border-white/[0.06]"
+        style={{ background: '#0a0e1a' }}>
+        {navContent}
+      </aside>
+
+      {/* Mobile drawer */}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={onClose} />
+          <aside className="fixed inset-y-0 left-0 z-50 flex flex-col w-72 border-r border-white/[0.06] lg:hidden"
+            style={{ background: '#0a0e1a' }}>
+            {navContent}
+          </aside>
+        </>
+      )}
+    </>
   )
 }
 
@@ -375,13 +403,13 @@ function OverviewPage({ onNav }) {
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
         <StatCard label="Active Orders"  value={stats?.active_orders}  icon={CheckCircle2} gradient="linear-gradient(135deg,#10b981,#059669)" loading={sLoad} onClick={() => onNav('orders')} />
         <StatCard label="Pending Orders" value={stats?.pending_orders} icon={Clock}        gradient="linear-gradient(135deg,#f59e0b,#d97706)" loading={sLoad} onClick={() => onNav('orders')} />
         <StatCard label="Orders Today"   value={stats?.today_orders}   icon={TrendingUp}   gradient="linear-gradient(135deg,#00b8e6,#1e2fa0)" loading={sLoad} onClick={() => onNav('orders')} />
         <StatCard label="Resources"      value={stats?.resource_count} icon={Package}      gradient="linear-gradient(135deg,#06b6d4,#0891b2)" loading={sLoad} onClick={() => onNav('inventory', { initialTab: 'resources' })} />
       </div>
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard label="Active Offers"  value={stats?.offer_count}    icon={Tag}          gradient="linear-gradient(135deg,#e6006e,#7c3aed)" loading={sLoad} onClick={() => onNav('inventory', { initialTab: 'offers' })} />
         <StatCard label="Out of Stock"   value={stats?.out_of_stock ?? 0} icon={Ban}       gradient="linear-gradient(135deg,#ef4444,#b91c1c)" loading={sLoad} onClick={() => onNav('inventory', { initialTab: 'stock' })} />
         <StatCard label="Support Tickets" value={totalTickets}         icon={Ticket}       gradient="linear-gradient(135deg,#8b5cf6,#6d28d9)" loading={totalTickets === null} onClick={() => onNav('support')} />
@@ -571,12 +599,12 @@ function OrdersPage() {
         <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search buyer, txn ID or status…"
-          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/40 transition-colors" />
+          className="w-full bg-slate-900 border border-white/[0.08] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/40 transition-colors" />
       </div>
 
       <Card>
         {loading ? <LoadingSpinner label="Loading orders…" /> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/[0.06]">
                 <th className="text-left px-5 py-3">Txn ID</th>
@@ -609,6 +637,7 @@ function OrdersPage() {
               )}
             </tbody>
           </table>
+          </div>
         )}
         <Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} limit={limit} />
       </Card>
@@ -636,7 +665,7 @@ function ResourcesTab() {
       {error && <div className="mb-3"><ErrorBox message={error} onRetry={reload} /></div>}
       <Card className="mt-4">
         {loading ? <LoadingSpinner label="Loading resources…" /> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/[0.06]">
                 <th className="text-left px-5 py-3">Resource ID</th>
@@ -676,6 +705,7 @@ function ResourcesTab() {
               )}
             </tbody>
           </table>
+          </div>
         )}
         <Pagination page={page} totalPages={Math.max(1, Math.ceil(total / limit))} onPage={setPage} total={total} limit={limit} />
       </Card>
@@ -738,7 +768,7 @@ function StockTab() {
 
       <Card>
         {loading ? <LoadingSpinner label="Loading stock…" /> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/[0.06]">
                 <th className="text-left px-5 py-3">Resource</th>
@@ -770,6 +800,7 @@ function StockTab() {
               )}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>
@@ -787,7 +818,7 @@ function OffersTab() {
       {error && <div className="mb-3"><ErrorBox message={error} onRetry={reload} /></div>}
       <Card className="mt-4">
         {loading ? <LoadingSpinner label="Loading offers…" /> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/[0.06]">
                 <th className="text-left px-5 py-3">Offer ID</th>
@@ -821,6 +852,7 @@ function OffersTab() {
               )}
             </tbody>
           </table>
+          </div>
         )}
         <Pagination page={page} totalPages={Math.max(1, Math.ceil(total / limit))} onPage={setPage} total={total} limit={limit} />
       </Card>
@@ -828,24 +860,139 @@ function OffersTab() {
   )
 }
 
-function InventoryPage({ initialTab = 'resources' }) {
+function InventoryProductsTab() {
+  const [search, setSearch]           = useState('')
+  const [catalogFilter, setCatalogFilter] = useState('')
+  const [providerFilter, setProviderFilter] = useState('')
+  const [page, setPage]               = useState(1)
+  const limit = 20
+
+  const url = `/inventory/items?search=${encodeURIComponent(search)}&catalog_id=${encodeURIComponent(catalogFilter)}&provider_id=${encodeURIComponent(providerFilter)}&page=${page}&limit=${limit}`
+  const { data, loading, error, reload } = useApi(url, [search, catalogFilter, providerFilter, page])
+  const { data: catData }  = useApi('/catalogs?limit=100', [])
+  const { data: provData } = useApi('/providers', [])
+
+  const items      = data?.items || []
+  const total      = data?.total || 0
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+  const catalogs   = catData?.items || []
+  const providers  = provData?.items || []
+
+  // Group items by provider then catalog
+  const grouped = {}
+  items.forEach(item => {
+    const pKey = item.providerName || item.providerId
+    const cKey = item.catalogName || item.catalogId
+    if (!grouped[pKey]) grouped[pKey] = {}
+    if (!grouped[pKey][cKey]) grouped[pKey][cKey] = []
+    grouped[pKey][cKey].push(item)
+  })
+
+  return (
+    <div className="space-y-4 mt-6">
+      {/* Filters */}
+      <Card className="p-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-44">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Search by name or ID…"
+              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm text-white placeholder-slate-600 border border-white/[0.08] bg-slate-900 focus:outline-none focus:border-blue-500/50 transition-colors" />
+          </div>
+          <select value={providerFilter} onChange={e => { setProviderFilter(e.target.value); setPage(1) }}
+            className="px-3 py-2 rounded-lg text-sm text-white border border-white/[0.08] bg-slate-900 focus:outline-none">
+            <option value="">All Providers</option>
+            {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={catalogFilter} onChange={e => { setCatalogFilter(e.target.value); setPage(1) }}
+            className="px-3 py-2 rounded-lg text-sm text-white border border-white/[0.08] bg-slate-900 focus:outline-none">
+            <option value="">All Catalogs</option>
+            {catalogs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button onClick={reload} className="p-2 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white transition-colors">
+            <RefreshCw size={13} />
+          </button>
+        </div>
+      </Card>
+
+      {loading ? <LoadingSpinner /> : error ? <ErrorBox message={error} /> : (
+        Object.keys(grouped).length === 0 ? (
+          <Card className="p-12 text-center text-slate-500">No products found.</Card>
+        ) : (
+          Object.entries(grouped).map(([providerName, catalogs]) => (
+            <div key={providerName} className="space-y-3">
+              {/* Provider header */}
+              <div className="flex items-center gap-2 px-1">
+                <Store size={14} className="text-slate-500" />
+                <p className="text-sm font-bold text-slate-300">{providerName}</p>
+              </div>
+              {Object.entries(catalogs).map(([catalogName, resources]) => (
+                <Card key={catalogName}>
+                  {/* Catalog sub-header */}
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+                    <BookOpen size={12} className="text-slate-500" />
+                    <p className="text-xs font-semibold text-slate-400">{catalogName}</p>
+                    <span className="ml-auto text-[10px] text-slate-600">{resources.length} products</span>
+                  </div>
+                  <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
+                    <thead>
+                      <tr>
+                        {['Resource', 'Description', 'Stock', 'Sold'].map(h => (
+                          <th key={h} className="px-4 py-2 text-left text-[10px] uppercase tracking-widest text-slate-600 font-semibold">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resources.map(r => (
+                        <tr key={r.id} className="border-t border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                          <td className="px-4 py-2.5">
+                            <p className="font-medium text-white text-sm">{r.name}</p>
+                            <p className="text-[11px] font-mono text-slate-600">{r.id}</p>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-slate-500 max-w-48 truncate">{r.shortDesc || '—'}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`text-sm font-bold ${r.stock === 0 ? 'text-red-400' : r.stock <= 5 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                              {r.stock}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-500 text-sm">{r.sold}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ))
+        )
+      )}
+      <Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} limit={limit} />
+    </div>
+  )
+}
+
+function InventoryPage({ initialTab = 'products' }) {
   const [tab, setTab] = useState(initialTab)
   return (
     <div>
       <PageHeader breadcrumb="Inventory" title="Your Inventory"
-        subtitle="Resources, offers and live stock levels" />
+        subtitle="Products by provider & catalog, with stock levels" />
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-        {['resources', 'offers', 'stock'].map(t => (
+        {['products', 'resources', 'offers', 'stock'].map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${
               tab !== t ? 'text-slate-400 hover:text-slate-200' : 'text-white shadow-lg'
             }`}
             style={tab === t ? { background: BRAND } : {}}>
-            {t === 'resources' ? '📦 Resources' : t === 'offers' ? '🏷️ Offers' : '📊 Stock'}
+            {t === 'products' ? '🏪 By Catalog' : t === 'resources' ? '📦 Resources' : t === 'offers' ? '🏷️ Offers' : '📊 Stock'}
           </button>
         ))}
       </div>
-      {tab === 'resources' ? <ResourcesTab /> : tab === 'offers' ? <OffersTab /> : <StockTab />}
+      {tab === 'products' ? <InventoryProductsTab />
+        : tab === 'resources' ? <ResourcesTab />
+        : tab === 'offers' ? <OffersTab />
+        : <StockTab />}
     </div>
   )
 }
@@ -886,6 +1033,131 @@ const EMPTY_OFFER = () => ({
 
 const CATALOG_TYPES  = ['', 'regular']
 const ALL_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+
+// ---------------------------------------------------------------------------
+// Auto-fill seed data — pool of real Indonesian snack products.
+// Each entry maps 1:1 to a complete form state (catalog + 1 resource + 1 offer).
+// ---------------------------------------------------------------------------
+const AUTO_FILL_POOL = [
+  {
+    catalog_id: 'cat-khong-guan-001', catalog_name: 'Toko Camilan Nusantara', catalog_type: '',
+    provider_id: 'provider-toko-nusantara-001', provider_name: 'Toko Camilan Nusantara',
+    validity_start: '2026-04-11', validity_end: '2027-04-11',
+    resources: [{
+      ...EMPTY_RESOURCE(),
+      id: 'res-biscuit-khong-guan-001',
+      name: 'Biskuit Kaleng Khong Guan (Khong Guan Assorted Biscuits Tin)',
+      short_desc: 'Aneka biskuit renyah dalam kaleng ikonik (Assorted crispy biscuits in iconic tin)',
+      long_desc: 'Koleksi biskuit klasik Khong Guan dengan berbagai rasa: vanila, cokelat, dan keju. Hadir dalam kaleng dekoratif yang bisa digunakan kembali. (Classic Khong Guan biscuit collection with vanilla, chocolate, and cheese varieties in a reusable decorative tin.)',
+      media_url: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=800&q=80',
+      stock_quantity: '200', brand: 'Khong Guan', origin_country: 'ID',
+      weight_value: '1600', weight_unit: 'G', color: 'Red', material: 'Tin', finish: 'Glossy',
+      mfr_type: 'MANUFACTURER', mfr_name: 'Khong Guan Biscuit Factory Pte Ltd', mfr_address: 'Jakarta, DKI Jakarta, ID',
+      common_name: 'Biskuit Assorted (Assorted Biscuits)', net_qty_value: '1600', net_qty_unit: 'G',
+    }],
+    offers: [{
+      ...EMPTY_OFFER(),
+      id: 'offer-biscuit-khong-guan-001', name: 'Biskuit Kaleng Khong Guan (Khong Guan Assorted Biscuits Tin)',
+      short_desc: 'Aneka biskuit renyah dalam kaleng ikonik', resource_ids: 'res-biscuit-khong-guan-001',
+      price: '185000', currency: 'IDR', validity_start: '2026-04-11', validity_end: '2027-04-11',
+    }],
+  },
+  {
+    catalog_id: 'cat-chitato-001', catalog_name: 'Toko Camilan Nusantara', catalog_type: '',
+    provider_id: 'provider-toko-nusantara-001', provider_name: 'Toko Camilan Nusantara',
+    validity_start: '2026-04-11', validity_end: '2027-04-11',
+    resources: [{
+      ...EMPTY_RESOURCE(),
+      id: 'res-chips-chitato-sapi-003',
+      name: 'Keripik Chitato Rasa Sapi Panggang (Chitato Beef BBQ Potato Chips)',
+      short_desc: 'Keripik kentang gurih rasa sapi panggang (Crunchy potato chips with BBQ beef flavor)',
+      long_desc: 'Chitato hadir dengan rasa Sapi Panggang yang kaya dan bumbu khas Indonesia. Dibuat dari kentang pilihan yang diproses dengan teknologi modern untuk tekstur renyah sempurna. (Chitato with rich BBQ Beef flavor and distinctive Indonesian seasoning, made from selected potatoes for perfect crunch.)',
+      media_url: 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=800&q=80',
+      stock_quantity: '1000', brand: 'Chitato', origin_country: 'ID',
+      weight_value: '68', weight_unit: 'G', color: 'Red', material: 'Plastic', finish: 'Glossy',
+      mfr_type: 'MANUFACTURER', mfr_name: 'PT Indofood CBP Sukses Makmur Tbk', mfr_address: 'Jakarta, DKI Jakarta, ID',
+      common_name: 'Keripik Kentang (Potato Chips)', net_qty_value: '68', net_qty_unit: 'G',
+    }],
+    offers: [{
+      ...EMPTY_OFFER(),
+      id: 'offer-chips-chitato-sapi-003', name: 'Keripik Chitato Rasa Sapi Panggang (Chitato Beef BBQ Potato Chips)',
+      short_desc: 'Keripik kentang gurih rasa sapi panggang', resource_ids: 'res-chips-chitato-sapi-003',
+      price: '12000', currency: 'IDR', validity_start: '2026-04-11', validity_end: '2027-04-11',
+      returns_allowed: false, replace_window: 'P3D',
+    }],
+  },
+  {
+    catalog_id: 'cat-lapis-legit-001', catalog_name: 'Toko Camilan Nusantara', catalog_type: '',
+    provider_id: 'provider-toko-nusantara-001', provider_name: 'Toko Camilan Nusantara',
+    validity_start: '2026-04-11', validity_end: '2027-04-11',
+    resources: [{
+      ...EMPTY_RESOURCE(),
+      id: 'res-cake-lapis-legit-005',
+      name: 'Kue Lapis Legit Premium (Premium Spekkoek Layered Cake)',
+      short_desc: 'Kue lapis klasik Belanda-Indonesia dengan lapisan sempurna (Classic Dutch-Indonesian layered cake)',
+      long_desc: 'Lapis Legit adalah kue tradisional warisan Belanda-Indonesia yang dibuat dengan lebih dari 18 lapisan tipis. Setiap lapisan dipanggang satu per satu menggunakan rempah pilihan seperti kayu manis, cengkeh, dan kapulaga. (Lapis Legit is a traditional Dutch-Indonesian heritage cake with over 18 thin layers, each baked individually using selected spices like cinnamon, cloves, and cardamom.)',
+      media_url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&q=80',
+      stock_quantity: '50', brand: 'Dapur Lapis', origin_country: 'ID',
+      weight_value: '700', weight_unit: 'G', color: 'Brown', material: 'Paper Box', finish: 'Matte',
+      mfr_type: 'MANUFACTURER', mfr_name: 'CV Dapur Lapis Nusantara', mfr_address: 'Bandung, Jawa Barat, ID',
+      common_name: 'Kue Lapis Legit (Spekkoek Cake)', net_qty_value: '700', net_qty_unit: 'G',
+    }],
+    offers: [{
+      ...EMPTY_OFFER(),
+      id: 'offer-cake-lapis-legit-005', name: 'Kue Lapis Legit Premium (Premium Spekkoek Layered Cake)',
+      short_desc: 'Kue lapis klasik Belanda-Indonesia', resource_ids: 'res-cake-lapis-legit-005',
+      price: '185000', currency: 'IDR', validity_start: '2026-04-11', validity_end: '2027-04-11',
+      returns_allowed: false, replace_allowed: false, max_distance: '10',
+    }],
+  },
+  {
+    catalog_id: 'cat-monde-butter-001', catalog_name: 'Toko Camilan Nusantara', catalog_type: '',
+    provider_id: 'provider-toko-nusantara-001', provider_name: 'Toko Camilan Nusantara',
+    validity_start: '2026-04-11', validity_end: '2027-04-11',
+    resources: [{
+      ...EMPTY_RESOURCE(),
+      id: 'res-biscuit-monde-butter-007',
+      name: 'Biskuit Monde Butter Cookies (Monde Butter Cookies)',
+      short_desc: 'Kue kering butter premium dalam kaleng cantik (Premium butter cookies in a beautiful tin)',
+      long_desc: 'Monde Butter Cookies hadir dalam kaleng premium dengan pilihan cookies berbentuk bunga, pretzel, dan cinnamon. Dibuat dari butter pilihan berkualitas tinggi dengan tekstur yang lumer di mulut. (Monde Butter Cookies in premium tin with flower-shaped, pretzel, and cinnamon cookie varieties. Made from high-quality selected butter with a melt-in-your-mouth texture.)',
+      media_url: 'https://images.unsplash.com/photo-1548365328-8c6db3220e4c?w=800&q=80',
+      stock_quantity: '150', brand: 'Monde', origin_country: 'ID',
+      weight_value: '454', weight_unit: 'G', color: 'Blue', material: 'Tin', finish: 'Glossy',
+      mfr_type: 'MANUFACTURER', mfr_name: 'PT Monde Mahkota Biskuit', mfr_address: 'Jakarta, DKI Jakarta, ID',
+      common_name: 'Kue Kering Butter (Butter Cookies)', net_qty_value: '454', net_qty_unit: 'G',
+    }],
+    offers: [{
+      ...EMPTY_OFFER(),
+      id: 'offer-biscuit-monde-butter-007', name: 'Biskuit Monde Butter Cookies (Monde Butter Cookies)',
+      short_desc: 'Kue kering butter premium dalam kaleng cantik', resource_ids: 'res-biscuit-monde-butter-007',
+      price: '120000', currency: 'IDR', validity_start: '2026-04-11', validity_end: '2027-04-11',
+    }],
+  },
+  {
+    catalog_id: 'cat-brownies-amanda-001', catalog_name: 'Toko Camilan Nusantara', catalog_type: '',
+    provider_id: 'provider-toko-nusantara-001', provider_name: 'Toko Camilan Nusantara',
+    validity_start: '2026-04-11', validity_end: '2027-04-11',
+    resources: [{
+      ...EMPTY_RESOURCE(),
+      id: 'res-cake-brownies-amanda-009',
+      name: 'Brownies Kukus Amanda Cokelat (Amanda Steamed Chocolate Brownies)',
+      short_desc: 'Brownies kukus lembut khas Bandung dengan cokelat premium (Soft steamed Bandung-style brownies)',
+      long_desc: 'Brownies Kukus Amanda adalah ikon kuliner Bandung yang terkenal. Dibuat dengan cokelat premium, teksturnya sangat lembut dan basah. Tersedia dalam varian original, keju, dan tiramisu. (Amanda Steamed Brownies are a famous Bandung culinary icon. Made with premium chocolate, extremely soft and moist. Available in original, cheese, and tiramisu variants.)',
+      media_url: 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80',
+      stock_quantity: '60', brand: 'Amanda', origin_country: 'ID',
+      weight_value: '800', weight_unit: 'G', color: 'Brown', material: 'Cardboard', finish: 'Matte',
+      mfr_type: 'MANUFACTURER', mfr_name: 'CV Amanda Brownies', mfr_address: 'Bandung, Jawa Barat, ID',
+      common_name: 'Brownies Kukus (Steamed Brownies)', net_qty_value: '800', net_qty_unit: 'G',
+    }],
+    offers: [{
+      ...EMPTY_OFFER(),
+      id: 'offer-cake-brownies-amanda-009', name: 'Brownies Kukus Amanda Cokelat (Amanda Steamed Chocolate Brownies)',
+      short_desc: 'Brownies kukus lembut khas Bandung dengan cokelat premium', resource_ids: 'res-cake-brownies-amanda-009',
+      price: '95000', currency: 'IDR', validity_start: '2026-04-11', validity_end: '2027-04-11',
+      returns_allowed: false, replace_allowed: false, max_distance: '10',
+    }],
+  },
+]
 
 // Build resourceAttributes JSON-LD object from flat form fields.
 function buildResourceAttrs(r) {
@@ -967,11 +1239,35 @@ function PublishPage({ onNav }) {
     validity_start: '', validity_end: '',
     resources: [EMPTY_RESOURCE()], offers: [EMPTY_OFFER()],
   })
-  const [error, setError]     = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [error, setError]       = useState(null)
+  const [loading, setLoading]   = useState(false)
+  const [autoFillIdx, setAutoFillIdx] = useState(0)
   // track which resource/offer "advanced" sections are expanded
   const [resOpen, setResOpen] = useState({})
   const [offOpen, setOffOpen] = useState({})
+
+  // Cycle through AUTO_FILL_POOL on each click so consecutive clicks give different products.
+  // A short hex suffix is appended to every ID to guarantee uniqueness across publishes.
+  const handleAutoFill = () => {
+    const seed  = AUTO_FILL_POOL[autoFillIdx % AUTO_FILL_POOL.length]
+    const suffix = Date.now().toString(36) // e.g. "lf3k2a"
+    const uid    = id => `${id}-${suffix}`
+
+    setForm({
+      ...seed,
+      catalog_id: uid(seed.catalog_id),
+      resources: seed.resources.map(r => ({ ...r, id: uid(r.id) })),
+      offers: seed.offers.map(o => ({
+        ...o,
+        id:           uid(o.id),
+        resource_ids: o.resource_ids.split(',').map(rid => uid(rid.trim())).join(', '),
+      })),
+    })
+    setAutoFillIdx(i => i + 1)
+    setResOpen({})
+    setOffOpen({})
+    setStep(0)
+  }
 
   const STEPS = ['Catalog Info', 'Resources', 'Offers', 'Review & Publish']
 
@@ -1035,13 +1331,20 @@ function PublishPage({ onNav }) {
     finally { setLoading(false) }
   }
 
-  const inputCls = 'w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/40 focus:bg-white/[0.06] transition-all'
+  const inputCls = 'w-full bg-slate-900 border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/40 focus:bg-slate-800 transition-all'
   const labelCls = 'block text-xs font-semibold text-slate-400 mb-1.5'
 
   return (
     <div className="max-w-3xl">
-      <PageHeader breadcrumb="Publish Catalog" title="Publish to Network"
-        subtitle="Push your resources and offers to the ION network" />
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <PageHeader breadcrumb="Publish Catalog" title="Publish to Network"
+          subtitle="Push your resources and offers to the ION network" />
+        <button onClick={handleAutoFill}
+          className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-dashed border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/70 transition-all active:scale-95 mt-1"
+          title="Auto-fill form with a sample Indonesian product">
+          <Wand2 size={15} /> Auto-fill Sample
+        </button>
+      </div>
 
       {/* Stepper */}
       <div className="flex items-center mb-8">
@@ -1078,7 +1381,7 @@ function PublishPage({ onNav }) {
           {step === 0 && (
             <Card className="p-6 space-y-5">
               <p className="text-sm font-bold text-white">Catalog Details</p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className={labelCls}>Catalog ID *</label>
                   <input className={inputCls} value={form.catalog_id} onChange={e => setField('catalog_id', e.target.value)} placeholder="cat-venky-bazaar-2026" required />
                 </div>
@@ -1101,7 +1404,7 @@ function PublishPage({ onNav }) {
               {/* Catalog validity */}
               <div className="pt-3 border-t border-white/[0.06]">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Catalog Validity <span className="text-slate-600 font-normal normal-case">(optional)</span></p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className={labelCls}>Valid From</label>
                     <input type="datetime-local" className={inputCls} value={form.validity_start} onChange={e => setField('validity_start', e.target.value)} />
                   </div>
@@ -1133,7 +1436,7 @@ function PublishPage({ onNav }) {
                   </div>
 
                   {/* Basic info */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div><label className={labelCls}>Resource ID *</label>
                       <input className={inputCls} value={r.id} onChange={e => setResourceField(i, 'id', e.target.value)} placeholder="item-flask-mh500-yellow" required />
                     </div>
@@ -1162,7 +1465,7 @@ function PublishPage({ onNav }) {
                   </button>
                   {resOpen[`${i}_phys`] && (
                     <div className="mt-3 space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div><label className={labelCls}>Brand</label>
                           <input className={inputCls} value={r.brand} onChange={e => setResourceField(i, 'brand', e.target.value)} placeholder="InstaCuppa" />
                         </div>
@@ -1229,7 +1532,7 @@ function PublishPage({ onNav }) {
                   </button>
                   {resOpen[`${i}_pkg`] && (
                     <div className="mt-3 space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div><label className={labelCls}>Manufacturer Type</label>
                           <select className={inputCls} value={r.mfr_type} onChange={e => setResourceField(i, 'mfr_type', e.target.value)}>
                             {['MANUFACTURER', 'PACKER', 'IMPORTER'].map(t => <option key={t}>{t}</option>)}
@@ -1284,7 +1587,7 @@ function PublishPage({ onNav }) {
                   </div>
 
                   {/* Basic info */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div><label className={labelCls}>Offer ID *</label>
                       <input className={inputCls} value={o.id} onChange={e => setOfferField(i, 'id', e.target.value)} placeholder="offer-flask-mh500-yellow" required />
                     </div>
@@ -1436,7 +1739,7 @@ function PublishPage({ onNav }) {
                           ))}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div><label className={labelCls}>Delivery Window Start</label>
                           <input type="time" className={inputCls} value={o.timing_start} onChange={e => setOfferField(i, 'timing_start', e.target.value)} />
                         </div>
@@ -1620,7 +1923,7 @@ function MessagesPage() {
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input value={filter} onChange={e => setFilter(e.target.value)}
             placeholder="Filter by action or txn ID…"
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/40 transition-colors" />
+            className="w-full bg-slate-900 border border-white/[0.08] rounded-xl pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/40 transition-colors" />
         </div>
         <div className="flex gap-1 p-0.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
           {['ALL', 'INBOUND', 'OUTBOUND'].map(d => (
@@ -1632,14 +1935,14 @@ function MessagesPage() {
           ))}
         </div>
         <select value={limit} onChange={e => setLimit(Number(e.target.value))}
-          className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-cyan-500/40 cursor-pointer">
+          className="bg-slate-900 border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-cyan-500/40 cursor-pointer">
           {[25, 50, 100, 200].map(n => <option key={n} value={n}>{n} rows</option>)}
         </select>
       </div>
 
       <Card>
         {loading ? <LoadingSpinner label="Loading messages…" /> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/[0.06]">
                 <th className="text-left px-5 py-3">Action</th>
@@ -1681,6 +1984,7 @@ function MessagesPage() {
               )}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
     </div>
@@ -1844,39 +2148,1027 @@ function RatingsPage() {
   )
 }
 
+// ─── Catalog Management ───────────────────────────────────────────────────────
+
+function CatalogsPage({ onNav }) {
+  const [search, setSearch]         = useState('')
+  const [providerFilter, setProviderFilter] = useState('')
+  const [page, setPage]             = useState(1)
+  const [publishing, setPublishing] = useState(null)
+  const limit = 20
+
+  const url = `/catalogs?search=${encodeURIComponent(search)}&provider_id=${encodeURIComponent(providerFilter)}&page=${page}&limit=${limit}`
+  const { data, loading, error, reload } = useApi(url, [search, providerFilter, page])
+  const { data: provData } = useApi('/providers', [])
+
+  const providers = provData?.items || []
+  const items = data?.items || []
+  const total = data?.total || 0
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+
+  const handlePublish = async (id) => {
+    if (!window.confirm(`Publish catalog "${id}" to the network?`)) return
+    setPublishing(id)
+    try {
+      await apiFetch(`/catalogs/${id}/publish`, { method: 'POST' })
+      alert('Catalog published successfully!')
+    } catch (e) {
+      alert('Publish failed: ' + e.message)
+    } finally {
+      setPublishing(null)
+    }
+  }
+
+  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString() : '—'
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Catalogs</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Create catalogs, add products, and publish to the network</p>
+        </div>
+        <button onClick={() => onNav('create_catalog')}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 active:scale-95"
+          style={{ background: BRAND }}>
+          <Plus size={15} /> Create Catalog
+        </button>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-52">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Search by name, ID or provider…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg text-sm text-white placeholder-slate-600 border border-white/[0.08] bg-slate-900 focus:outline-none focus:border-blue-500/50 transition-colors" />
+          </div>
+          <select value={providerFilter} onChange={e => { setProviderFilter(e.target.value); setPage(1) }}
+            className="px-3 py-2 rounded-lg text-sm text-white border border-white/[0.08] bg-slate-900 focus:outline-none focus:border-blue-500/50 transition-colors">
+            <option value="">All Providers</option>
+            {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
+          </select>
+          <button onClick={reload} className="p-2 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white transition-colors">
+            <RefreshCw size={14} />
+          </button>
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card>
+        {loading ? <LoadingSpinner /> : error ? <ErrorBox message={error} /> : (
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
+            <thead>
+              <tr className="border-b border-white/[0.06]">
+                {['Catalog', 'Provider', 'Products', 'Status', 'Validity', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-[10px] uppercase tracking-widest text-slate-500 font-semibold">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(cat => (
+                <tr key={cat.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-white">{cat.name}</p>
+                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">{cat.id}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-400 text-xs">{cat.providerId}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-slate-300 text-xs">{cat.resourceCount} res · {cat.offerCount} offers</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {cat.isPublished ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 w-fit">
+                          <CheckCircle2 size={9} /> Published
+                        </span>
+                        <span className="text-[10px] text-slate-600">{fmtDate(cat.networkPublishedAt)}</span>
+                      </div>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 w-fit">
+                        <Circle size={9} className="fill-amber-400" /> Draft
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-500">
+                    {cat.validityStart ? `${fmtDate(cat.validityStart)} – ${fmtDate(cat.validityEnd)}` : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => onNav('catalog_detail', { catalogId: cat.id })}
+                        className="px-2.5 py-1 rounded-md text-xs font-medium border border-white/[0.10] text-slate-300 hover:text-white hover:border-white/30 transition-colors flex items-center gap-1">
+                        <Eye size={11} /> View
+                      </button>
+                      <button onClick={() => onNav('add_product', { catalogId: cat.id })}
+                        className="px-2.5 py-1 rounded-md text-xs font-medium border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors flex items-center gap-1">
+                        <Plus size={11} /> Product
+                      </button>
+                      <button onClick={() => handlePublish(cat.id)} disabled={publishing === cat.id}
+                        className="px-2.5 py-1 rounded-md text-xs font-medium border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors flex items-center gap-1 disabled:opacity-40">
+                        {publishing === cat.id ? <RefreshCw size={11} className="animate-spin" /> : <Send size={11} />} Publish
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!items.length && (
+                <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                  No catalogs yet. <button onClick={() => onNav('create_catalog')} className="text-blue-400 hover:underline ml-1">Create one →</button>
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+          </div>
+        )}
+        <Pagination page={page} totalPages={totalPages} onPage={setPage} total={total} limit={limit} />
+      </Card>
+    </div>
+  )
+}
+
+// ─── Create Catalog Page ──────────────────────────────────────────────────────
+
+const CATALOG_AUTOFILL_POOL = [
+  { id: 'cat-outdoor-gear', name: 'Outdoor Gear Store', short_desc: 'Camping, hiking & adventure equipment',
+    provider_id: 'provider-venky-bazaar', provider_name: 'Venky Bazaar' },
+  { id: 'cat-indonesian-snacks', name: 'Toko Camilan Nusantara', short_desc: 'Authentic Indonesian biscuits, chips & sweets',
+    provider_id: 'provider-toko-nusantara', provider_name: 'Toko Nusantara' },
+  { id: 'cat-electronics', name: 'Tech Essentials Hub', short_desc: 'Gadgets, accessories and consumer electronics',
+    provider_id: 'provider-techmart', provider_name: 'TechMart' },
+  { id: 'cat-apparel', name: 'FashionForward Apparel', short_desc: 'Trendy clothing for men and women',
+    provider_id: 'provider-fashionco', provider_name: 'FashionCo' },
+]
+let _catalogFillIdx = 0
+
+function CreateCatalogPage({ onNav }) {
+  const [form, setForm] = useState({
+    id: '', name: '', short_desc: '',
+    provider_id: '', provider_name: '',
+    validity_start: '', validity_end: '',
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+
+  const labelCls = 'block text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-1'
+  const inputCls = 'w-full px-3 py-2 rounded-lg text-sm text-white placeholder-slate-600 border border-white/[0.08] bg-slate-900 focus:outline-none focus:border-blue-500/50 transition-colors'
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleAutoFill = () => {
+    const seed   = CATALOG_AUTOFILL_POOL[_catalogFillIdx % CATALOG_AUTOFILL_POOL.length]
+    _catalogFillIdx++
+    const suffix = Date.now().toString(36)
+    const now    = new Date()
+    const start  = now.toISOString().slice(0,16)
+    const end    = new Date(now.getTime() + 365*24*60*60*1000).toISOString().slice(0,16)
+    setForm({ ...seed, id: `${seed.id}-${suffix}`, validity_start: start, validity_end: end })
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!form.id || !form.name || !form.provider_id || !form.provider_name) {
+      setError('Catalog ID, Name, Provider ID and Provider Name are required.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      await apiFetch('/catalogs', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: form.id,
+          descriptor: { name: form.name, shortDesc: form.short_desc },
+          provider: { id: form.provider_id, descriptor: { name: form.provider_name } },
+          ...(form.validity_start && form.validity_end ? {
+            validity: { startDate: new Date(form.validity_start).toISOString(), endDate: new Date(form.validity_end).toISOString() }
+          } : {}),
+        }),
+      })
+      onNav('catalog_detail', { catalogId: form.id })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="flex items-center gap-3">
+        <button onClick={() => onNav('catalogs')} className="p-2 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft size={16} />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-white tracking-tight">Create Catalog</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Fill in the catalog details — add products after creation</p>
+        </div>
+        <button type="button" onClick={handleAutoFill}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors">
+          <Wand2 size={13} /> Auto-fill Sample
+        </button>
+      </div>
+
+      {error && <ErrorBox message={error} />}
+
+      <Card>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold pb-2 border-b border-white/[0.06]">Catalog Info</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><label className={labelCls}>Catalog ID *</label>
+              <input className={inputCls} value={form.id} onChange={e => set('id', e.target.value)} placeholder="cat-outdoor-2026" required />
+            </div>
+            <div><label className={labelCls}>Catalog Name *</label>
+              <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="Outdoor Gear 2026" required />
+            </div>
+            <div className="col-span-2"><label className={labelCls}>Short Description</label>
+              <input className={inputCls} value={form.short_desc} onChange={e => set('short_desc', e.target.value)} placeholder="Camping and hiking gear for adventurers" />
+            </div>
+          </div>
+
+          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold pb-2 border-b border-white/[0.06] mt-4">Provider</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><label className={labelCls}>Provider ID *</label>
+              <input className={inputCls} value={form.provider_id} onChange={e => set('provider_id', e.target.value)} placeholder="provider-venky-bazaar" required />
+            </div>
+            <div><label className={labelCls}>Provider Name *</label>
+              <input className={inputCls} value={form.provider_name} onChange={e => set('provider_name', e.target.value)} placeholder="Venky Bazaar" required />
+            </div>
+          </div>
+
+          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold pb-2 border-b border-white/[0.06] mt-4">Validity (optional)</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><label className={labelCls}>Start Date</label>
+              <input type="datetime-local" className={inputCls} value={form.validity_start} onChange={e => set('validity_start', e.target.value)} />
+            </div>
+            <div><label className={labelCls}>End Date</label>
+              <input type="datetime-local" className={inputCls} value={form.validity_end} onChange={e => set('validity_end', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={() => onNav('catalogs')}
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold border border-white/[0.10] text-slate-400 hover:text-white transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="flex-1 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+              style={{ background: BRAND }}>
+              {loading ? 'Creating…' : 'Create Catalog & Add Products →'}
+            </button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Catalog Detail Page ──────────────────────────────────────────────────────
+
+function CatalogDetailPage({ onNav, catalogId }) {
+  const { data, loading, error, reload } = useApi(`/catalogs/${catalogId}`, [catalogId])
+  const [publishing, setPublishing] = useState(false)
+
+  const cat       = data?.catalog   || {}
+  const resources = data?.resources || []
+  const offers    = data?.offers    || []
+
+  // Build a map from resource_id → offer for quick lookup
+  const offerByResourceId = {}
+  offers.forEach(o => {
+    (o.resourceIds || []).forEach(rid => { offerByResourceId[rid] = o })
+  })
+
+  const handlePublish = async () => {
+    if (!window.confirm('Publish this catalog to the Beckn network?')) return
+    setPublishing(true)
+    try {
+      await apiFetch(`/catalogs/${catalogId}/publish`, { method: 'POST' })
+      reload()
+      alert('Published successfully!')
+    } catch (e) {
+      alert('Publish failed: ' + e.message)
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString() : '—'
+
+  const getPrice = (r) => {
+    const o = offerByResourceId[r.id]
+    if (!o) return '—'
+    try {
+      const ca = typeof o.considerationAttributes === 'string'
+        ? JSON.parse(o.considerationAttributes)
+        : o.considerationAttributes
+      if (ca?.totalAmount !== undefined) return `${ca.currency || ''} ${ca.totalAmount}`.trim()
+      if (ca?.breakup?.[0]?.amount !== undefined) return `${ca.breakup[0].amount}`
+    } catch { /* ignore */ }
+    return '—'
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <button onClick={() => onNav('catalogs')} className="p-2 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft size={16} />
+        </button>
+        <div className="flex-1">
+          {loading ? <div className="h-7 w-48 rounded bg-white/[0.06] animate-pulse" /> : (
+            <>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-white tracking-tight">{cat.name || catalogId}</h1>
+                {cat.isPublished ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400">
+                    <CheckCircle2 size={10} /> Published
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400">
+                    <Circle size={10} className="fill-amber-400" /> Draft
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-mono mt-0.5">{cat.id} · {cat.providerId}
+                {cat.networkPublishedAt && <span className="ml-2 text-emerald-600">· Last published {fmtDate(cat.networkPublishedAt)}</span>}
+              </p>
+            </>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => onNav('add_offer', { catalogId })}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold border border-slate-500/30 text-slate-400 hover:bg-slate-500/10 transition-colors">
+            <Tag size={14} /> Add Offer
+          </button>
+          <button onClick={() => onNav('add_product', { catalogId })}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors">
+            <Plus size={14} /> Add Product
+          </button>
+          <button onClick={handlePublish} disabled={publishing}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+            style={{ background: BRAND }}>
+            {publishing ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+            {publishing ? 'Publishing…' : 'Publish to Network'}
+          </button>
+        </div>
+      </div>
+
+      {error && <ErrorBox message={error} />}
+
+      {/* Catalog meta */}
+      {!loading && cat.id && (
+        <div className="grid grid-cols-4 gap-4">
+          <Card className="p-4">
+            <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-1">Provider</p>
+            <p className="text-sm font-semibold text-slate-200">{cat.providerName || cat.providerId}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-1">Products</p>
+            <p className="text-sm font-semibold text-slate-200">{resources.length} resources · {offers.length} offers</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-1">Validity</p>
+            <p className="text-sm font-semibold text-slate-200">{cat.validityStart ? `${fmtDate(cat.validityStart)} – ${fmtDate(cat.validityEnd)}` : 'Not set'}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-1">Network Status</p>
+            {cat.isPublished ? (
+              <div>
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400"><CheckCircle2 size={11} /> Published</span>
+                <p className="text-[10px] text-slate-600 mt-0.5">{fmtDate(cat.networkPublishedAt)}</p>
+              </div>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400"><Circle size={11} className="fill-amber-400" /> Draft (never published)</span>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Products table */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-bold text-slate-200">Products</p>
+          <div className="flex gap-2">
+            <button onClick={reload} className="p-1.5 rounded-lg border border-white/[0.08] text-slate-500 hover:text-white transition-colors">
+              <RefreshCw size={13} />
+            </button>
+            <button onClick={() => onNav('add_product', { catalogId })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:scale-105"
+              style={{ background: BRAND }}>
+              <Plus size={12} /> Add Product
+            </button>
+          </div>
+        </div>
+        {loading ? <LoadingSpinner /> : (
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
+            <thead>
+              <tr className="border-b border-white/[0.06]">
+                {['Resource', 'Description', 'Price', 'Offer ID', 'Validity'].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-[10px] uppercase tracking-widest text-slate-500 font-semibold">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {resources.map(r => {
+                const offer = offerByResourceId[r.id]
+                return (
+                  <tr key={r.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {r.mediaFiles && r.mediaFiles !== '[]' && r.mediaFiles !== 'null' && (() => {
+                          try {
+                            const mf = typeof r.mediaFiles === 'string' ? JSON.parse(r.mediaFiles) : r.mediaFiles
+                            const url = Array.isArray(mf) ? mf[0]?.url : mf?.url
+                            if (url) return <img src={url} alt="" className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
+                          } catch { return null }
+                          return null
+                        })()}
+                        <div>
+                          <p className="font-semibold text-white">{r.name}</p>
+                          <p className="text-[11px] font-mono text-slate-500">{r.id}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 text-xs max-w-48 truncate">{r.shortDesc || '—'}</td>
+                    <td className="px-4 py-3 font-semibold text-emerald-400">{getPrice(r)}</td>
+                    <td className="px-4 py-3 text-[11px] font-mono text-slate-500">{offer?.id || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">
+                      {offer?.validityStart ? `${fmtDate(offer.validityStart)} – ${fmtDate(offer.validityEnd)}` : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+              {!resources.length && (
+                <tr><td colSpan={5} className="px-4 py-12 text-center text-slate-500">
+                  No products yet.{' '}
+                  <button onClick={() => onNav('add_product', { catalogId })} className="text-blue-400 hover:underline">Add the first product →</button>
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ─── Add Product Page ─────────────────────────────────────────────────────────
+
+const DAYS_OF_WEEK = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+
+const PRODUCT_AUTOFILL_POOL = [
+  { res: { id: 'item-keripik-singkong', name: 'Keripik Singkong Balado (Spicy Cassava Chips)', short_desc: 'Crispy cassava chips with balado seasoning', stock_quantity: '50', media_url: 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=400', brand: 'Chitato', origin_country: 'ID', weight_value: '150', weight_unit: 'G', color: 'Golden', material: 'Cassava' },
+    off: { id: 'offer-keripik-singkong', name: 'Keripik Singkong Balado', price: '25000', currency: 'IDR', cod_available: true, returns_allowed: true, returns_window: 'P7D', returns_method: 'SELLER_PICKUP', cancel_allowed: true, cancel_window: 'PT2H', cancel_event: 'BEFORE_PACKING', replace_allowed: false, max_distance: '20', timing_days: ['MON','TUE','WED','THU','FRI','SAT','SUN'], timing_start: '09:00', timing_end: '21:00', offer_context: 'https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailOffer/v2.1/context.jsonld' } },
+  { res: { id: 'item-bolu-pisang', name: 'Bolu Pisang Cokelat (Chocolate Banana Cake)', short_desc: 'Soft banana cake with chocolate chips', stock_quantity: '30', media_url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400', brand: 'HomeMade', origin_country: 'ID', weight_value: '400', weight_unit: 'G', color: 'Brown', material: 'Flour' },
+    off: { id: 'offer-bolu-pisang', name: 'Bolu Pisang Cokelat', price: '45000', currency: 'IDR', cod_available: true, returns_allowed: false, cancel_allowed: true, cancel_window: 'PT1H', cancel_event: 'BEFORE_PACKING', replace_allowed: false, max_distance: '10', timing_days: ['MON','TUE','WED','THU','FRI','SAT'], timing_start: '08:00', timing_end: '18:00', offer_context: 'https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailOffer/v2.1/context.jsonld' } },
+  { res: { id: 'item-teh-botol', name: 'Teh Botol Sosro (Bottled Jasmine Tea)', short_desc: 'Ready-to-drink jasmine tea', stock_quantity: '200', media_url: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400', brand: 'Sosro', origin_country: 'ID', weight_value: '350', weight_unit: 'ML', color: 'Amber', material: 'PET Bottle' },
+    off: { id: 'offer-teh-botol', name: 'Teh Botol Sosro', price: '5000', currency: 'IDR', cod_available: true, returns_allowed: false, cancel_allowed: true, cancel_window: 'PT30M', cancel_event: 'BEFORE_PACKING', replace_allowed: false, max_distance: '15', timing_days: ['MON','TUE','WED','THU','FRI','SAT','SUN'], timing_start: '07:00', timing_end: '22:00', offer_context: 'https://raw.githubusercontent.com/beckn/local-retail/refs/heads/main/schema/RetailOffer/v2.1/context.jsonld' } },
+]
+let _productFillIdx = 0
+
+// ── Shared offer form component ────────────────────────────────────────────
+
+function OfferForm({ off, oSet, offOpen, setOffOpen, catalogId, showResourcePicker }) {
+  const labelCls = 'block text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-1'
+  const inputCls = 'w-full px-3 py-2 rounded-lg text-sm text-white placeholder-slate-600 border border-white/[0.08] bg-slate-900 focus:outline-none focus:border-blue-500/50 transition-colors'
+
+  const { data: catResData } = useApi(showResourcePicker ? `/catalogs/${catalogId}/resources` : null, [catalogId, showResourcePicker])
+  const existingResources = catResData?.items || []
+
+  return (
+    <>
+      {/* Resource picker for offer-only mode */}
+      {showResourcePicker && existingResources.length > 0 && (
+        <div className="mb-4">
+          <label className={labelCls}>Link to Resource(s) *</label>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {existingResources.map(r => (
+              <label key={r.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.06] hover:bg-slate-800 cursor-pointer">
+                <input type="checkbox" className="accent-blue-500"
+                  checked={off.resource_ids.split(',').map(s => s.trim()).includes(r.id)}
+                  onChange={e => {
+                    const cur = off.resource_ids.split(',').map(s => s.trim()).filter(Boolean)
+                    const next = e.target.checked ? [...cur, r.id] : cur.filter(x => x !== r.id)
+                    oSet('resource_ids', next.join(', '))
+                  }} />
+                <span className="text-xs text-slate-300 flex-1">{r.name}</span>
+                <span className="text-[10px] font-mono text-slate-600">{r.id}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label className={labelCls}>Offer ID *</label>
+          <input className={inputCls} value={off.id} onChange={e => oSet('id', e.target.value)} placeholder="offer-flask-mh500" required />
+        </div>
+        <div><label className={labelCls}>Offer Name *</label>
+          <input className={inputCls} value={off.name} onChange={e => oSet('name', e.target.value)} placeholder="Flask 500ml Yellow" required />
+        </div>
+        {!showResourcePicker && (
+          <div className="col-span-full"><label className={labelCls}>Resource IDs <span className="text-slate-600 font-normal">(comma-separated; leave blank to auto-link)</span></label>
+            <input className={inputCls} value={off.resource_ids} onChange={e => oSet('resource_ids', e.target.value)} placeholder="item-flask-mh500" />
+          </div>
+        )}
+        <div><label className={labelCls}>Price</label>
+          <input className={inputCls} type="number" min="0" step="0.01" value={off.price} onChange={e => oSet('price', e.target.value)} placeholder="499" />
+        </div>
+        <div><label className={labelCls}>Currency</label>
+          <select className={inputCls} value={off.currency} onChange={e => oSet('currency', e.target.value)}>
+            {['INR','USD','EUR','SGD','MYR','IDR'].map(c => <option key={c} className="bg-slate-900">{c}</option>)}
+          </select>
+        </div>
+        <div><label className={labelCls}>Validity Start</label>
+          <input type="datetime-local" className={inputCls} value={off.validity_start} onChange={e => oSet('validity_start', e.target.value)} />
+        </div>
+        <div><label className={labelCls}>Validity End</label>
+          <input type="datetime-local" className={inputCls} value={off.validity_end} onChange={e => oSet('validity_end', e.target.value)} />
+        </div>
+        <div><label className={labelCls}>Short Description</label>
+          <input className={inputCls} value={off.short_desc} onChange={e => oSet('short_desc', e.target.value)} placeholder="Best seller flask" />
+        </div>
+      </div>
+
+      {/* Policies collapsible */}
+      <button type="button" onClick={() => setOffOpen(s => ({ ...s, pol: !s.pol }))}
+        className="mt-4 w-full flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors pt-3 border-t border-white/[0.06]">
+        <span>📋 Policies &amp; Serviceability</span>
+        <ChevronRightIcon size={13} className={`transition-transform ${offOpen.pol ? 'rotate-90' : ''}`} />
+      </button>
+      {offOpen.pol && (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Returns */}
+            <div className="p-3 rounded-lg bg-slate-800/50 border border-white/[0.06] space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-300">Returns</p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-xs text-slate-500">Allowed</span>
+                  <input type="checkbox" checked={off.returns_allowed} onChange={e => oSet('returns_allowed', e.target.checked)} className="accent-blue-500" />
+                </label>
+              </div>
+              {off.returns_allowed && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className={labelCls}>Window</label>
+                    <input className={inputCls} value={off.returns_window} onChange={e => oSet('returns_window', e.target.value)} placeholder="P7D" />
+                  </div>
+                  <div><label className={labelCls}>Method</label>
+                    <select className={inputCls} value={off.returns_method} onChange={e => oSet('returns_method', e.target.value)}>
+                      {['SELLER_PICKUP','BUYER_RETURN','DROP_AT_STORE'].map(m => <option key={m} className="bg-slate-900">{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Cancellation */}
+            <div className="p-3 rounded-lg bg-slate-800/50 border border-white/[0.06] space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-300">Cancellation</p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-xs text-slate-500">Allowed</span>
+                  <input type="checkbox" checked={off.cancel_allowed} onChange={e => oSet('cancel_allowed', e.target.checked)} className="accent-blue-500" />
+                </label>
+              </div>
+              {off.cancel_allowed && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className={labelCls}>Window</label>
+                    <input className={inputCls} value={off.cancel_window} onChange={e => oSet('cancel_window', e.target.value)} placeholder="PT2H" />
+                  </div>
+                  <div><label className={labelCls}>Cutoff</label>
+                    <select className={inputCls} value={off.cancel_event} onChange={e => oSet('cancel_event', e.target.value)}>
+                      {['BEFORE_PACKING','BEFORE_SHIPPING','BEFORE_DELIVERY'].map(ev => <option key={ev} className="bg-slate-900">{ev}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* COD + distance */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 rounded-lg bg-slate-800/50 border border-white/[0.06]">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={off.cod_available} onChange={e => oSet('cod_available', e.target.checked)} className="accent-blue-500" />
+                <span className="text-xs font-semibold text-slate-300">Cash on Delivery (COD)</span>
+              </label>
+            </div>
+            <div className="p-3 rounded-lg bg-slate-800/50 border border-white/[0.06] space-y-2">
+              <p className="text-xs font-semibold text-slate-300">Delivery Radius</p>
+              <div className="flex gap-2">
+                <input className={inputCls} type="number" value={off.max_distance} onChange={e => oSet('max_distance', e.target.value)} placeholder="15" />
+                <select className={`${inputCls} w-20 shrink-0`} value={off.distance_unit} onChange={e => oSet('distance_unit', e.target.value)}>
+                  {['KM','MI'].map(u => <option key={u} className="bg-slate-900">{u}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          {/* Timing */}
+          <div className="p-3 rounded-lg bg-slate-800/50 border border-white/[0.06] space-y-3">
+            <p className="text-xs font-semibold text-slate-300">Operating Hours</p>
+            <div className="flex flex-wrap gap-1.5">
+              {DAYS_OF_WEEK.map(d => (
+                <button key={d} type="button"
+                  onClick={() => oSet('timing_days', off.timing_days.includes(d) ? off.timing_days.filter(x => x !== d) : [...off.timing_days, d])}
+                  className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors ${off.timing_days.includes(d) ? 'text-white' : 'border border-white/[0.10] text-slate-500 hover:text-white'}`}
+                  style={off.timing_days.includes(d) ? { background: BRAND } : {}}>
+                  {d}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className={labelCls}>Opens</label>
+                <input type="time" className={inputCls} value={off.timing_start} onChange={e => oSet('timing_start', e.target.value)} />
+              </div>
+              <div><label className={labelCls}>Closes</label>
+                <input type="time" className={inputCls} value={off.timing_end} onChange={e => oSet('timing_end', e.target.value)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── Add Product Page (resource only) ──────────────────────────────────────
+
+function AddProductPage({ onNav, catalogId }) {
+  const labelCls = 'block text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-1'
+  const inputCls = 'w-full px-3 py-2 rounded-lg text-sm text-white placeholder-slate-600 border border-white/[0.08] bg-slate-900 focus:outline-none focus:border-blue-500/50 transition-colors'
+
+  const [res, setRes]         = useState(EMPTY_RESOURCE())
+  const [resOpen, setResOpen] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  const rSet = (k, v) => setRes(r => ({ ...r, [k]: v }))
+
+  const handleAutoFill = () => {
+    const seed   = PRODUCT_AUTOFILL_POOL[_productFillIdx % PRODUCT_AUTOFILL_POOL.length]
+    _productFillIdx++
+    const uid = id => `${id}-${Date.now().toString(36)}`
+    setRes({ ...EMPTY_RESOURCE(), ...seed.res, id: uid(seed.res.id) })
+    setResOpen({}); setError(null)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!res.id || !res.name) { setError('Resource ID and Name are required.'); return }
+    setLoading(true); setError(null)
+
+    const resourceAttrs = buildResourceAttrs(res)
+    const mediaFile = res.media_url ? [{ uri: res.media_url, mimeType: 'image/jpeg' }] : []
+
+    // We use /products but with a minimal auto-generated placeholder offer so backend accepts it
+    const offerId = `offer-${res.id}`
+    try {
+      await apiFetch(`/catalogs/${catalogId}/products`, {
+        method: 'POST',
+        body: JSON.stringify({
+          resource: {
+            id: res.id,
+            descriptor: { name: res.name, shortDesc: res.short_desc, longDesc: res.long_desc, mediaFile },
+            stockQuantity: res.stock_quantity ? Number(res.stock_quantity) : 0,
+            ...(resourceAttrs ? { resourceAttributes: resourceAttrs } : {}),
+          },
+          offer: {
+            id: offerId,
+            descriptor: { name: res.name },
+            resourceIds: [res.id],
+          },
+        }),
+      })
+      setSuccess(true)
+      setTimeout(() => onNav('add_offer', { catalogId, preselectedResourceId: res.id }), 1000)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <CheckCircle2 size={48} className="text-emerald-400" />
+        <p className="text-white text-lg font-semibold">Resource added!</p>
+        <p className="text-slate-500 text-sm">Opening offer setup…</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="flex items-center gap-3">
+        <button onClick={() => onNav('catalog_detail', { catalogId })} className="p-2 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft size={16} />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-white tracking-tight">Add Product</h1>
+          <p className="text-xs text-slate-500 font-mono mt-0.5">catalog: {catalogId}</p>
+        </div>
+        <button type="button" onClick={handleAutoFill}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors">
+          <Wand2 size={13} /> Auto-fill
+        </button>
+      </div>
+
+      {error && <ErrorBox message={error} />}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Card className="p-4 sm:p-6">
+          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold pb-3 border-b border-white/[0.06] mb-4">📦 Resource Details</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><label className={labelCls}>Resource ID *</label>
+              <input className={inputCls} value={res.id} onChange={e => rSet('id', e.target.value)} placeholder="item-flask-mh500" required />
+            </div>
+            <div><label className={labelCls}>Name *</label>
+              <input className={inputCls} value={res.name} onChange={e => rSet('name', e.target.value)} placeholder="Stainless Steel Hiking Flask" required />
+            </div>
+            <div><label className={labelCls}>Short Description</label>
+              <input className={inputCls} value={res.short_desc} onChange={e => rSet('short_desc', e.target.value)} placeholder="500ml insulated flask" />
+            </div>
+            <div><label className={labelCls}>Long Description</label>
+              <input className={inputCls} value={res.long_desc} onChange={e => rSet('long_desc', e.target.value)} placeholder="Full description…" />
+            </div>
+            <div><label className={labelCls}>Stock Quantity <span className="text-slate-600 font-normal">(blank = unlimited)</span></label>
+              <input className={inputCls} type="number" min="0" value={res.stock_quantity} onChange={e => rSet('stock_quantity', e.target.value)} placeholder="50" />
+            </div>
+            <div><label className={labelCls}>Image URL</label>
+              <input className={inputCls} value={res.media_url} onChange={e => rSet('media_url', e.target.value)} placeholder="https://example.com/product.jpg" />
+            </div>
+          </div>
+
+          {/* Identity & Physical */}
+          <button type="button" onClick={() => setResOpen(s => ({ ...s, phys: !s.phys }))}
+            className="mt-4 w-full flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors pt-3 border-t border-white/[0.06]">
+            <span>🏷️ Identity &amp; Physical Attributes</span>
+            <ChevronRightIcon size={13} className={`transition-transform ${resOpen.phys ? 'rotate-90' : ''}`} />
+          </button>
+          {resOpen.phys && (
+            <div className="mt-3 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className={labelCls}>Brand</label>
+                  <input className={inputCls} value={res.brand} onChange={e => rSet('brand', e.target.value)} placeholder="InstaCuppa" />
+                </div>
+                <div><label className={labelCls}>Origin Country</label>
+                  <input className={inputCls} value={res.origin_country} onChange={e => rSet('origin_country', e.target.value)} placeholder="IN" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="col-span-1 sm:col-span-2"><label className={labelCls}>Weight</label>
+                  <input className={inputCls} type="number" value={res.weight_value} onChange={e => rSet('weight_value', e.target.value)} placeholder="350" />
+                </div>
+                <div className="col-span-1 sm:col-span-2"><label className={labelCls}>Unit</label>
+                  <select className={inputCls} value={res.weight_unit} onChange={e => rSet('weight_unit', e.target.value)}>
+                    {['G','KG','MG','OZ','LB'].map(u => <option key={u} className="bg-slate-900">{u}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-1 sm:col-span-2"><label className={labelCls}>Volume</label>
+                  <input className={inputCls} type="number" value={res.volume_value} onChange={e => rSet('volume_value', e.target.value)} placeholder="500" />
+                </div>
+                <div className="col-span-1 sm:col-span-2"><label className={labelCls}>Unit</label>
+                  <select className={inputCls} value={res.volume_unit} onChange={e => rSet('volume_unit', e.target.value)}>
+                    {['ML','L','FL_OZ'].map(u => <option key={u} className="bg-slate-900">{u}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className={labelCls}>Color</label><input className={inputCls} value={res.color} onChange={e => rSet('color', e.target.value)} placeholder="Yellow" /></div>
+                <div><label className={labelCls}>Material</label><input className={inputCls} value={res.material} onChange={e => rSet('material', e.target.value)} placeholder="Steel" /></div>
+                <div><label className={labelCls}>Finish</label><input className={inputCls} value={res.finish} onChange={e => rSet('finish', e.target.value)} placeholder="Matte" /></div>
+              </div>
+            </div>
+          )}
+
+          {/* Packaged Goods */}
+          <button type="button" onClick={() => setResOpen(s => ({ ...s, pkg: !s.pkg }))}
+            className="mt-4 w-full flex items-center justify-between text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors pt-3 border-t border-white/[0.06]">
+            <span>📦 Packaged Goods Declaration</span>
+            <ChevronRightIcon size={13} className={`transition-transform ${resOpen.pkg ? 'rotate-90' : ''}`} />
+          </button>
+          {resOpen.pkg && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><label className={labelCls}>Manufacturer Type</label>
+                <select className={inputCls} value={res.mfr_type} onChange={e => rSet('mfr_type', e.target.value)}>
+                  {['MANUFACTURER','PACKER','IMPORTER'].map(t => <option key={t} className="bg-slate-900">{t}</option>)}
+                </select>
+              </div>
+              <div><label className={labelCls}>Manufacturer Name</label>
+                <input className={inputCls} value={res.mfr_name} onChange={e => rSet('mfr_name', e.target.value)} placeholder="Company Ltd" />
+              </div>
+              <div className="col-span-full"><label className={labelCls}>Manufacturer Address</label>
+                <input className={inputCls} value={res.mfr_address} onChange={e => rSet('mfr_address', e.target.value)} placeholder="City, State, Country" />
+              </div>
+              <div><label className={labelCls}>Common / Generic Name</label>
+                <input className={inputCls} value={res.common_name} onChange={e => rSet('common_name', e.target.value)} placeholder="Vacuum Flask" />
+              </div>
+              <div><label className={labelCls}>Net Quantity</label>
+                <div className="flex gap-2">
+                  <input className={inputCls} type="number" value={res.net_qty_value} onChange={e => rSet('net_qty_value', e.target.value)} placeholder="500" />
+                  <select className={`${inputCls} w-24 shrink-0`} value={res.net_qty_unit} onChange={e => rSet('net_qty_unit', e.target.value)}>
+                    {['ML','L','G','KG','PCS'].map(u => <option key={u} className="bg-slate-900">{u}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button type="button" onClick={() => onNav('catalog_detail', { catalogId })}
+            className="px-5 py-3 rounded-xl text-sm font-semibold border border-white/[0.10] text-slate-400 hover:text-white transition-colors text-center">
+            Cancel
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 px-5 py-3 rounded-xl text-sm font-semibold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ background: BRAND }}>
+            {loading ? <><RefreshCw size={14} className="animate-spin" /> Saving…</> : <><Plus size={14} /> Save Resource → Setup Offer</>}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ── Add Offer Page (standalone) ───────────────────────────────────────────
+
+function AddOfferPage({ onNav, catalogId, preselectedResourceId }) {
+  const [off, setOff]         = useState(() => ({
+    ...EMPTY_OFFER(),
+    resource_ids: preselectedResourceId || '',
+  }))
+  const [offOpen, setOffOpen] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  const oSet = (k, v) => setOff(o => ({ ...o, [k]: v }))
+
+  const handleAutoFill = () => {
+    const seed = PRODUCT_AUTOFILL_POOL[_productFillIdx % PRODUCT_AUTOFILL_POOL.length]
+    _productFillIdx++
+    const uid = id => `${id}-${Date.now().toString(36)}`
+    setOff({ ...EMPTY_OFFER(), ...seed.off, id: uid(seed.off.id),
+      resource_ids: preselectedResourceId || '' })
+    setOffOpen({}); setError(null)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!off.id || !off.name) { setError('Offer ID and Name are required.'); return }
+    setLoading(true); setError(null)
+
+    const offerAttrs = buildOfferAttrs(off)
+    const resourceIds = off.resource_ids.split(',').map(s => s.trim()).filter(Boolean)
+
+    const payload = {
+      id: off.id,
+      descriptor: { name: off.name, shortDesc: off.short_desc },
+      resourceIds,
+      ...(off.validity_start && off.validity_end ? {
+        validity: { startDate: new Date(off.validity_start).toISOString(), endDate: new Date(off.validity_end).toISOString() }
+      } : {}),
+      ...(offerAttrs ? { offerAttributes: offerAttrs } : {}),
+      ...(off.price ? {
+        considerations: [{
+          id: `${off.id}-price`,
+          status: { code: 'ACTIVE', name: 'ACTIVE' },
+          considerationAttributes: {
+            '@context': 'https://schema.beckn.io/RetailConsideration/v2.1/context.jsonld',
+            '@type': 'RetailConsideration',
+            currency: off.currency,
+            breakup: [{ title: off.name || off.id, amount: Number(off.price), type: 'BASE_PRICE' }],
+            totalAmount: Number(off.price),
+            paymentMethods: off.cod_available ? ['PREPAID', 'COD', 'UPI'] : ['PREPAID', 'UPI'],
+          },
+        }],
+      } : {}),
+    }
+
+    try {
+      await apiFetch(`/catalogs/${catalogId}/offers`, { method: 'POST', body: JSON.stringify(payload) })
+      setSuccess(true)
+      setTimeout(() => onNav('catalog_detail', { catalogId }), 1200)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <CheckCircle2 size={48} className="text-emerald-400" />
+        <p className="text-white text-lg font-semibold">Offer added!</p>
+        <p className="text-slate-500 text-sm">Redirecting to catalog…</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="flex items-center gap-3">
+        <button onClick={() => onNav('catalog_detail', { catalogId })} className="p-2 rounded-lg border border-white/[0.08] text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft size={16} />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-white tracking-tight">Add Offer</h1>
+          <p className="text-xs text-slate-500 font-mono mt-0.5">catalog: {catalogId}</p>
+        </div>
+        <button type="button" onClick={handleAutoFill}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors">
+          <Wand2 size={13} /> Auto-fill
+        </button>
+      </div>
+
+      {error && <ErrorBox message={error} />}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Card className="p-4 sm:p-6">
+          <p className="text-xs uppercase tracking-widest text-slate-500 font-bold pb-3 border-b border-white/[0.06] mb-4">🏷️ Offer Details</p>
+          <OfferForm off={off} oSet={oSet} offOpen={offOpen} setOffOpen={setOffOpen}
+            catalogId={catalogId} showResourcePicker={!preselectedResourceId} />
+        </Card>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button type="button" onClick={() => onNav('catalog_detail', { catalogId })}
+            className="px-5 py-3 rounded-xl text-sm font-semibold border border-white/[0.10] text-slate-400 hover:text-white transition-colors text-center">
+            Cancel
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 px-5 py-3 rounded-xl text-sm font-semibold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ background: BRAND }}>
+            {loading ? <><RefreshCw size={14} className="animate-spin" /> Adding…</> : <><Tag size={14} /> Add Offer to Catalog</>}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 // ─── App shell ────────────────────────────────────────────────────────────────
 
 const PAGES = {
-  overview:  OverviewPage,
-  orders:    OrdersPage,
-  inventory: InventoryPage,
-  publish:   PublishPage,
-  messages:  MessagesPage,
-  support:   SupportPage,
-  ratings:   RatingsPage,
+  overview:       OverviewPage,
+  orders:         OrdersPage,
+  inventory:      InventoryPage,
+  catalogs:       CatalogsPage,
+  create_catalog: CreateCatalogPage,
+  catalog_detail: CatalogDetailPage,
+  add_product:    AddProductPage,
+  add_offer:      AddOfferPage,
+  publish:        PublishPage,
+  messages:       MessagesPage,
+  support:        SupportPage,
+  ratings:        RatingsPage,
 }
 
 export default function App() {
-  const [page, setPage]         = useState('overview')
+  const [page, setPage]       = useState('overview')
   const [navExtra, setNavExtra] = useState({})
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const Page = PAGES[page] || OverviewPage
 
-  const onNav = (target, extra = {}) => { setPage(target); setNavExtra(extra) }
+  const onNav = (target, extra = {}) => { setPage(target); setNavExtra(extra); setSidebarOpen(false) }
 
   return (
     <div className="flex min-h-screen" style={{ background: '#080d1e' }}>
-      <Sidebar active={page} onNav={onNav} />
+      <Sidebar active={page} onNav={onNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="flex-1 ml-64 p-7 lg:p-9 overflow-y-auto min-h-screen">
-        <AnimatePresence mode="wait">
-          <motion.div key={page}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}>
-            <Page onNav={onNav} {...navExtra} />
-          </motion.div>
-        </AnimatePresence>
+      <main className="flex-1 lg:ml-64 min-h-screen overflow-y-auto">
+        {/* Mobile top bar */}
+        <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06]"
+          style={{ background: '#0a0e1a' }}>
+          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg text-slate-400 hover:text-white transition-colors">
+            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+          <span className="text-sm font-semibold text-white">BPP Admin</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-auto" />
+        </div>
+
+        <div className="p-4 sm:p-6 lg:p-9">
+          <AnimatePresence mode="wait">
+            <motion.div key={page}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}>
+              <Page onNav={onNav} {...navExtra} />
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </main>
     </div>
   )
