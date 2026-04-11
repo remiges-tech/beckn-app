@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -111,8 +112,8 @@ func (s *ConfirmService) ProcessConfirm(ctx context.Context, req *ConfirmRequest
 		Message: OnConfirmMessage{Contract: confirmedContract},
 	}
 
-	// POST on_confirm to BAP and log OUTBOUND.
-	s.callOnConfirm(ctx, txID, outboundMsgID, req.Context.BapURI, onConfirmReq)
+	// POST on_confirm through ONIX BPP caller (so the request is signed) and log OUTBOUND.
+	s.callOnConfirm(ctx, txID, outboundMsgID, onConfirmReq)
 }
 
 // decrementStock reduces the on-hand stock by 1 for every resource referenced
@@ -176,12 +177,31 @@ func (s *ConfirmService) callOnConfirm(
 	ctx context.Context,
 	txID uuid.UUID,
 	msgID uuid.UUID,
-	bapURI string,
 	req OnConfirmRequest,
 ) {
 	start := time.Now()
-	onConfirmURL := bapURI + "/on_confirm"
+	onConfirmURL, err := s.resolveOnConfirmURL(req.Context.BapURI)
 	reqJSON, _ := json.Marshal(req)
+
+	if err != nil {
+		s.lh.WithModule("confirmsvc").Err().Error(err).Log("on_confirm target resolution failed")
+		s.writeMessageLog(ctx, dbsqlc.InsertMessageLogParams{
+			TransactionID:        uuidToPgtype(txID),
+			MessageID:            msgID,
+			Action:               dbsqlc.BecknActionOnConfirm,
+			Direction:            dbsqlc.MessageDirectionOUTBOUND,
+			BapID:                strPtr(req.Context.BapID),
+			BapUri:               strPtr(req.Context.BapURI),
+			BppID:                strPtr(req.Context.BppID),
+			BppUri:               strPtr(req.Context.BppURI),
+			NetworkID:            strPtr(req.Context.NetworkID),
+			AckStatus:            dbsqlc.NullAckStatus{AckStatus: dbsqlc.AckStatusNACK, Valid: true},
+			RequestPayload:       reqJSON,
+			ErrorMessage:         errStrPtr(err),
+			ProcessingDurationMs: durationMs(start),
+		})
+		return
+	}
 
 	var (
 		respBody []byte
@@ -242,7 +262,31 @@ func (s *ConfirmService) callOnConfirm(
 	}
 
 	prettyLog(fmt.Sprintf("← ACK  ON_CONFIRM | txn=%.8s… | http=%d | dur=%dms", txID, resp.StatusCode, time.Since(start).Milliseconds()), map[string]interface{}{"http_code": resp.StatusCode, "response": json.RawMessage(respBody)})
-	s.lh.WithModule("confirmsvc").Log("on_confirm sent to BAP successfully")
+	s.lh.WithModule("confirmsvc").Log("on_confirm sent successfully")
+}
+
+// resolveOnConfirmURL returns the ONIX BPP caller on_confirm endpoint.
+// Priority:
+//  1. BPP_CALLER_URL env/config (e.g. https://bpptest.remiges.tech/bpp/caller)
+//  2. Derived from BPP_URI by replacing /bpp/receiver with /bpp/caller
+func (s *ConfirmService) resolveOnConfirmURL(_ string) (string, error) {
+	base := strings.TrimSpace(s.cfg.BppCallerURL)
+	if base == "" {
+		base = strings.TrimSpace(s.cfg.BppURI)
+		if base == "" {
+			return "", fmt.Errorf("cannot resolve on_confirm URL: both BPP_CALLER_URL and BPP_URI are empty")
+		}
+		if strings.HasSuffix(base, "/") {
+			base = strings.TrimSuffix(base, "/")
+		}
+		if strings.HasSuffix(base, "/bpp/receiver") {
+			base = strings.TrimSuffix(base, "/bpp/receiver") + "/bpp/caller"
+		} else {
+			return "", fmt.Errorf("cannot derive caller URL from BPP_URI %q; set BPP_CALLER_URL", s.cfg.BppURI)
+		}
+	}
+	base = strings.TrimRight(base, "/")
+	return base + "/on_confirm", nil
 }
 
 // writeMessageLog inserts one audit row into beckn_message_log.

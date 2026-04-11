@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -104,8 +105,8 @@ func (s *InitService) ProcessInit(ctx context.Context, req *InitRequest) {
 		Message: OnInitMessage{Contract: responseContract},
 	}
 
-	// POST on_init to BAP and log OUTBOUND.
-	s.callOnInit(ctx, txID, outboundMsgID, req.Context.BapURI, onInitReq)
+	// POST on_init through ONIX BPP caller (so the request is signed) and log OUTBOUND.
+	s.callOnInit(ctx, txID, outboundMsgID, onInitReq)
 }
 
 // persistContract writes all contract sub-entities to the DB in a single transaction.
@@ -296,12 +297,31 @@ func (s *InitService) callOnInit(
 	ctx context.Context,
 	txID uuid.UUID,
 	msgID uuid.UUID,
-	bapURI string,
 	req OnInitRequest,
 ) {
 	start := time.Now()
-	onInitURL := bapURI + "/on_init"
+	onInitURL, err := s.resolveOnInitURL(req.Context.BapURI)
 	reqJSON, _ := json.Marshal(req)
+
+	if err != nil {
+		s.lh.WithModule("initsvc").Err().Error(err).Log("on_init target resolution failed")
+		s.writeMessageLog(ctx, dbsqlc.InsertMessageLogParams{
+			TransactionID:        uuidToPgtype(txID),
+			MessageID:            msgID,
+			Action:               dbsqlc.BecknActionOnInit,
+			Direction:            dbsqlc.MessageDirectionOUTBOUND,
+			BapID:                strPtr(req.Context.BapID),
+			BapUri:               strPtr(req.Context.BapURI),
+			BppID:                strPtr(req.Context.BppID),
+			BppUri:               strPtr(req.Context.BppURI),
+			NetworkID:            strPtr(req.Context.NetworkID),
+			AckStatus:            dbsqlc.NullAckStatus{AckStatus: dbsqlc.AckStatusNACK, Valid: true},
+			RequestPayload:       reqJSON,
+			ErrorMessage:         errStrPtr(err),
+			ProcessingDurationMs: durationMs(start),
+		})
+		return
+	}
 
 	var (
 		respBody []byte
@@ -362,7 +382,31 @@ func (s *InitService) callOnInit(
 	}
 
 	prettyLog(fmt.Sprintf("← ACK  ON_INIT   | txn=%.8s… | http=%d | dur=%dms", txID, resp.StatusCode, time.Since(start).Milliseconds()), map[string]interface{}{"http_code": resp.StatusCode, "response": json.RawMessage(respBody)})
-	s.lh.WithModule("initsvc").Log("on_init sent to BAP successfully")
+	s.lh.WithModule("initsvc").Log("on_init sent successfully")
+}
+
+// resolveOnInitURL returns the ONIX BPP caller on_init endpoint.
+// Priority:
+//  1. BPP_CALLER_URL env/config (e.g. https://bpptest.remiges.tech/bpp/caller)
+//  2. Derived from BPP_URI by replacing /bpp/receiver with /bpp/caller
+func (s *InitService) resolveOnInitURL(_ string) (string, error) {
+	base := strings.TrimSpace(s.cfg.BppCallerURL)
+	if base == "" {
+		base = strings.TrimSpace(s.cfg.BppURI)
+		if base == "" {
+			return "", fmt.Errorf("cannot resolve on_init URL: both BPP_CALLER_URL and BPP_URI are empty")
+		}
+		if strings.HasSuffix(base, "/") {
+			base = strings.TrimSuffix(base, "/")
+		}
+		if strings.HasSuffix(base, "/bpp/receiver") {
+			base = strings.TrimSuffix(base, "/bpp/receiver") + "/bpp/caller"
+		} else {
+			return "", fmt.Errorf("cannot derive caller URL from BPP_URI %q; set BPP_CALLER_URL", s.cfg.BppURI)
+		}
+	}
+	base = strings.TrimRight(base, "/")
+	return base + "/on_init", nil
 }
 
 // writeMessageLog inserts one audit row into beckn_message_log.
