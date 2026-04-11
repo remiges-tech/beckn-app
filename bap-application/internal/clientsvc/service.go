@@ -599,7 +599,7 @@ func (s *ClientService) RequestStatus(ctx context.Context, req *ClientRequestSta
 		Context: s.newContext("status", req.TransactionID, msgID.String(), bppID, bppURI),
 		Message: json.RawMessage(msgJSON),
 	}
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "status", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "status", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
@@ -652,7 +652,7 @@ func (s *ClientService) Cancel(ctx context.Context, req *ClientCancelRequest) er
 		Context: s.newContext("cancel", req.TransactionID, msgID.String(), bppID, bppURI),
 		Message: json.RawMessage(msgJSON),
 	}
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "cancel", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "cancel", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
@@ -682,7 +682,7 @@ func (s *ClientService) Update(ctx context.Context, req *ClientUpdateRequest) er
 		Context: s.newContext("update", req.TransactionID, msgID.String(), bppID, bppURI),
 		Message: json.RawMessage(msgJSON),
 	}
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "update", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "update", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
@@ -749,7 +749,7 @@ func (s *ClientService) Rate(ctx context.Context, req *ClientRateRequest) error 
 		Context: s.newContext("rate", req.TransactionID, msgID.String(), bppID, bppURI),
 		Message: json.RawMessage(msgJSON),
 	}
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "rate", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "rate", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
@@ -790,7 +790,7 @@ func (s *ClientService) Support(ctx context.Context, req *ClientSupportRequest) 
 		Context: s.newContext("support", req.TransactionID, msgID.String(), bppID, bppURI),
 		Message: json.RawMessage(msgJSON),
 	}
-	if err := s.sendToBPP(ctx, s.cfg.AdapterURL, "support", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
+	if err := s.sendToBPP(ctx, s.cfg.BapCallerURL, "support", txnID, msgID, s.cfg.NetworkID, becknReq); err != nil {
 		return err
 	}
 	return q.UpsertTransaction(ctx, dbsqlc.UpsertTransactionParams{
