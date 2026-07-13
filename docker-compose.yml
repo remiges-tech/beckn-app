@@ -26,6 +26,79 @@ services:
     networks:
       - beckn
 
+  # ─── ONIX Adapter Infrastructure ──────────────────────────────────────────
+  redis-bap:
+    image: redis:alpine
+    container_name: redis-bap
+    networks:
+      - beckn
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-bpp:
+    image: redis:alpine
+    container_name: redis-bpp
+    networks:
+      - beckn
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  onix-bap:
+    image: fidedocker/onix-adapter:latest
+    container_name: onix-bap
+    platform: linux/amd64
+    restart: unless-stopped
+    networks:
+      - beckn
+    ports:
+      - "8081:8081"
+    environment:
+      CONFIG_FILE: "/app/config/local-simple-bap.yaml"
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+      REDIS_ADDR: redis-bap:6379
+      RABBITMQ_ADDR: rabbitmq:5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: admin123
+    depends_on:
+      redis-bap:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./schemas:/app/schemas
+    command: [ "./server", "--config=/app/config/local-simple-bap.yaml" ]
+
+  onix-bpp:
+    image: fidedocker/onix-adapter:latest
+    container_name: onix-bpp
+    platform: linux/amd64
+    restart: unless-stopped
+    networks:
+      - beckn
+    ports:
+      - "8082:8082"
+    environment:
+      CONFIG_FILE: "/app/config/local-simple-bpp.yaml"
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+      REDIS_ADDR: redis-bpp:6379
+      RABBITMQ_ADDR: rabbitmq:5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: admin123
+    depends_on:
+      redis-bpp:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+      - ./schemas:/app/schemas
+    command: [ "./server", "--config=/app/config/local-simple-bpp.yaml" ]
+
   # ─── BPP Application ──────────────────────────────────────────────────────
   bpp:
     build:
@@ -35,6 +108,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      onix-bpp:
+        condition: service_started
     environment:
       APP_PORT: "8080"
       APP_ENV: development
@@ -49,12 +124,19 @@ services:
       LOG_LEVEL: info
 
       BPP_ID: bpptest1.remiges.tech
-      BPP_URI: https://bpptest.remiges.tech/bpp/receiver
+      BPP_URI: http://onix-bpp:8082/bpp/receiver
       NETWORK_ID: ion.id/ion-winroom-0426
 
+      # BppCallerURL is the ONIX BPP caller base URL used for outbound on_* callbacks.
+      BPP_CALLER_URL: http://onix-bpp:8082/bpp/caller
+
       CDS_PUBLISH_URL: "https://fabric.nfh.global/beckn/catalog/publish" # BPP → CDS catalog publish endpoint
-      BPP_SIGNING_PRIVATE_KEY: "" # base64 Ed25519 seed (required for signed outbound calls)
-      BPP_SIGNING_KEY_ID: "key-001"
+
+      # Ed25519 signing key registered for bpptest1.remiges.tech — signs outbound
+      # requests to CDS_PUBLISH_URL (mirrors the keyManager config in
+      # config/local-simple-bpp.yaml). Sourced from the git-ignored root .env file.
+      BPP_PRIVATE_KEY: ${BPP_PRIVATE_KEY}
+      BPP_KEY_ID: ${BPP_KEY_ID}
     ports:
       - "8080:8080"
     networks:
@@ -69,6 +151,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      onix-bap:
+        condition: service_started
     environment:
       APP_PORT: "8083"
       APP_ENV: development
@@ -84,17 +168,23 @@ services:
 
       BAP_ID: baptest1.remiges.tech
       # BAP_URI goes in context.bapUri so the adapter/BPP knows where to send callbacks.
-      BAP_URI: https://baptest.remiges.tech/bap/receiver
+      BAP_URI: http://onix-bap:8081/bap/receiver
       NETWORK_ID: ion.id/ion-winroom-0426
 
       # BPP identity placed in context.bppId / context.bppUri.
       BPP_ID: bpptest1.remiges.tech
-      BPP_URI: https://bpptest.remiges.tech/bpp/receiver
+      BPP_URI: http://onix-bpp:8082/bpp/receiver
 
       # ADAPTER_URL is the ONIX BAP adapter the BAP actually POSTs to.
-      ADAPTER_URL: https://baptest.remiges.tech/bap/caller
+      ADAPTER_URL: http://onix-bap:8081/bap/caller
 
       CDS_DISCOVER_URL: "https://34.47.138.217.sslip.io/beckn/discover"
+
+      # Ed25519 signing key registered for baptest1.remiges.tech — signs outbound
+      # requests to CDS_DISCOVER_URL (mirrors the keyManager config in
+      # config/local-simple-bap.yaml). Sourced from the git-ignored root .env file.
+      BAP_PRIVATE_KEY: ${BAP_PRIVATE_KEY}
+      BAP_KEY_ID: ${BAP_KEY_ID}
     ports:
       - "8083:8083"
     networks:

@@ -1,0 +1,15 @@
+routingRules:
+  - version: "2.0.0"
+    targetType: "url"
+    target:
+      url: "http://bpp:8080/api/webhook"
+    endpoints:
+      - select
+      - init
+      - confirm
+      - status
+      - cancel
+      - update
+      - rate
+      - support
+      - catalog/on_publish

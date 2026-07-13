@@ -1,0 +1,6 @@
+# Local secrets — never commit
+.env
+bap-application/cmd/server/.env
+bpp-application/cmd/server/.env
+config/local-simple-bap.yaml
+config/local-simple-bpp.yaml
