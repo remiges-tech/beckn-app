@@ -210,6 +210,7 @@ func (s *SelectService) enrichCommitment(
 	}
 
 	// Enrich each resource with full descriptor + attributes.
+	qty := extractQty(c.CommitmentAttributes)
 	var enrichedResources []Resource
 	for _, r := range c.Resources {
 		dbRes, err := q.GetResource(ctx, dbsqlc.GetResourceParams{ID: r.ID, BppID: bppID})
@@ -225,6 +226,7 @@ func (s *SelectService) enrichCommitment(
 				LongDesc:  strVal(dbRes.DescriptorLongDesc),
 			},
 			ResourceAttributes: dbRes.ResourceAttributes,
+			Quantity:           &quantity{UnitCode: "EA", UnitQuantity: qty},
 		})
 	}
 	enriched.Resources = enrichedResources
@@ -246,7 +248,6 @@ func (s *SelectService) enrichCommitment(
 	}
 
 	// Merge unit price into commitmentAttributes.
-	qty := extractQty(c.CommitmentAttributes)
 	enriched.CommitmentAttributes = mergePrice(c.CommitmentAttributes, unitPrice, currency, qty)
 
 	return

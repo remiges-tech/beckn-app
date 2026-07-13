@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/remiges-tech/alya/service"
 	"github.com/remiges-tech/alya/wscutils"
+	"github.com/remiges-tech/logharbour/logharbour"
 
 	"github.com/ion/winroom/bpp/internal/cancelsvc"
 	"github.com/ion/winroom/bpp/internal/catalog"
@@ -55,7 +56,7 @@ func RegisterRoutes(svc *service.Service, cfg *config.Config) {
 	// Provider-facing catalog publish API (simplified — no Beckn context required from provider)
 	v1 := svc.Router.Group("/api/v1")
 	registerProviderCatalogRoutes(svc, v1, pool, cfg)
-	registerDashboardRoutes(v1, pool, cfg)
+	registerDashboardRoutes(v1, pool, cfg, svc.LogHarbour)
 
 	webhook := svc.Router.Group("/api/webhook")
 	registerTransactionRoutes(svc, webhook, pool, cfg)
@@ -144,8 +145,8 @@ func registerProviderCatalogRoutes(svc *service.Service, g *gin.RouterGroup, poo
 // Dashboard API  (GET /api/v1/dashboard/*, /api/v1/orders/*, etc.)
 // ---------------------------------------------------------------------------
 
-func registerDashboardRoutes(v1 *gin.RouterGroup, pool *pgxpool.Pool, cfg *config.Config) {
-	h := dashboardsvc.NewHandler(pool, cfg)
+func registerDashboardRoutes(v1 *gin.RouterGroup, pool *pgxpool.Pool, cfg *config.Config, lh *logharbour.Logger) {
+	h := dashboardsvc.NewHandler(pool, cfg, lh)
 
 	v1.GET("/dashboard/stats", h.HandleStats)
 

@@ -35,6 +35,15 @@ type Config struct {
 
 	// CDSPublishURL is the catalog discovery service endpoint that receives catalog/publish requests.
 	CDSPublishURL string
+
+	// BppPrivateKey is the base64-encoded Ed25519 private key (64 bytes) or seed (32 bytes)
+	// used to sign outbound Beckn requests. Required when CDSPublishURL is set.
+	// Env: BPP_PRIVATE_KEY
+	BppPrivateKey string
+
+	// BppKeyID is the Beckn signing key identifier in the format
+	// "<subscriberID>|<uniqueKeyID>|ed25519". Env: BPP_KEY_ID
+	BppKeyID string
 }
 
 // Load reads all config values from the environment and returns a validated Config.
@@ -58,6 +67,9 @@ func Load() (*Config, error) {
 		BppCallerURL: os.Getenv("BPP_CALLER_URL"),
 
 		CDSPublishURL: os.Getenv("CDS_PUBLISH_URL"),
+
+		BppPrivateKey: os.Getenv("BPP_PRIVATE_KEY"),
+		BppKeyID:      os.Getenv("BPP_KEY_ID"),
 	}
 
 	if err := cfg.validate(); err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/remiges-tech/logharbour/logharbour"
 
 	"github.com/ion/winroom/bpp/db/sqlc"
 	"github.com/ion/winroom/bpp/internal/config"
@@ -21,10 +22,11 @@ const defaultPageSize = 20
 type Handler struct {
 	pool *pgxpool.Pool
 	cfg  *config.Config
+	lh   *logharbour.Logger
 }
 
-func NewHandler(pool *pgxpool.Pool, cfg *config.Config) *Handler {
-	return &Handler{pool: pool, cfg: cfg}
+func NewHandler(pool *pgxpool.Pool, cfg *config.Config, lh *logharbour.Logger) *Handler {
+	return &Handler{pool: pool, cfg: cfg, lh: lh}
 }
 
 // ---------------------------------------------------------------------------

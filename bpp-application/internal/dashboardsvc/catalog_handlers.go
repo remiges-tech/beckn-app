@@ -2,10 +2,12 @@ package dashboardsvc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -578,6 +580,15 @@ func (h *Handler) HandlePublishCatalog(c *gin.Context) {
 		if len(mediaRaw) > 0 && string(mediaRaw) != "[]" && string(mediaRaw) != "null" {
 			_ = json.Unmarshal(mediaRaw, &r.Descriptor.MediaFile)
 		}
+		// Drop entries with a blank uri — the CDS schema requires a valid URI
+		// format, and an empty string (no image uploaded yet) fails validation.
+		validMedia := r.Descriptor.MediaFile[:0]
+		for _, m := range r.Descriptor.MediaFile {
+			if strings.TrimSpace(m.URI) != "" {
+				validMedia = append(validMedia, m)
+			}
+		}
+		r.Descriptor.MediaFile = validMedia
 		becknCat.Resources = append(becknCat.Resources, r)
 	}
 	resRows.Close()
@@ -662,13 +673,17 @@ func (h *Handler) HandlePublishCatalog(c *gin.Context) {
 	}
 
 	// Forward to CDS using the same CDSCatalog stripping logic.
+	start := time.Now()
+	txID := uuid.New()
+	msgID := uuid.New()
+
 	becknReq := map[string]any{
 		"context": map[string]string{
 			"version":       "2.0.0",
 			"action":        "catalog/publish",
 			"timestamp":     time.Now().UTC().Format(time.RFC3339),
-			"transactionId": uuid.New().String(),
-			"messageId":     uuid.New().String(),
+			"transactionId": txID.String(),
+			"messageId":     msgID.String(),
 			"bppId":         h.cfg.BppID,
 			"bppUri":        h.cfg.BppURI,
 			"networkId":     h.cfg.NetworkID,
@@ -679,16 +694,70 @@ func (h *Handler) HandlePublishCatalog(c *gin.Context) {
 	}
 
 	body, _ := json.Marshal(becknReq)
-	resp, err := http.Post(h.cfg.CDSPublishURL, "application/json", bytes.NewReader(body)) //nolint:noctx
+
+	// respBody and callErr are captured by the deferred audit log below,
+	// regardless of which branch returns.
+	var respBody []byte
+	var callErr error
+	defer func() {
+		var errMsg *string
+		if callErr != nil {
+			errMsg = strPtr(callErr.Error())
+		}
+		ackStatus := dbsqlc.NullAckStatus{AckStatus: dbsqlc.AckStatusACK, Valid: true}
+		if callErr != nil {
+			ackStatus = dbsqlc.NullAckStatus{AckStatus: dbsqlc.AckStatusNACK, Valid: true}
+		}
+		dur := int32(time.Since(start).Milliseconds())
+		if err := dbsqlc.New(h.pool).InsertMessageLog(context.Background(), dbsqlc.InsertMessageLogParams{
+			TransactionID:        pgtype.UUID{Bytes: txID, Valid: true},
+			MessageID:            msgID,
+			Action:               dbsqlc.BecknActionCatalogPublish,
+			Direction:            dbsqlc.MessageDirectionOUTBOUND,
+			Url:                  strPtr(h.cfg.CDSPublishURL),
+			BppID:                strPtr(h.cfg.BppID),
+			BppUri:               strPtr(h.cfg.BppURI),
+			NetworkID:            strPtr(h.cfg.NetworkID),
+			AckStatus:            ackStatus,
+			RequestPayload:       body,
+			ResponsePayload:      json.RawMessage(respBody),
+			ErrorMessage:         errMsg,
+			ProcessingDurationMs: &dur,
+		}); err != nil && h.lh != nil {
+			h.lh.WithModule("dashboardsvc").Warn().Error(err).Log("failed to write beckn_message_log")
+		}
+	}()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, h.cfg.CDSPublishURL, bytes.NewReader(body))
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "CDS call failed: " + err.Error()})
+		callErr = fmt.Errorf("build CDS request: %w", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": callErr.Error()})
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if h.cfg.BppPrivateKey != "" {
+		authHeader, authErr := catalog.BuildAuthHeader(body, h.cfg.BppKeyID, h.cfg.BppPrivateKey)
+		if authErr != nil {
+			callErr = fmt.Errorf("build auth header: %w", authErr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": callErr.Error()})
+			return
+		}
+		httpReq.Header.Set("Authorization", authHeader)
+	}
+
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		callErr = fmt.Errorf("CDS call failed: %w", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": callErr.Error()})
 		return
 	}
 	defer resp.Body.Close() //nolint:errcheck
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, _ = io.ReadAll(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("CDS returned %d: %s", resp.StatusCode, string(respBody))})
+		callErr = fmt.Errorf("CDS returned %d: %s", resp.StatusCode, string(respBody))
+		c.JSON(http.StatusBadGateway, gin.H{"error": callErr.Error()})
 		return
 	}
 

@@ -181,6 +181,14 @@ func (s *PublishService) forwardToCDS(ctx context.Context, txID uuid.UUID, req *
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	if s.cfg.BppPrivateKey != "" {
+		authHeader, err := becknAuthHeader(becknReqJSON, s.cfg.BppKeyID, s.cfg.BppPrivateKey)
+		if err != nil {
+			return fmt.Errorf("build Beckn Authorization header: %w", err)
+		}
+		httpReq.Header.Set("Authorization", authHeader)
+	}
+
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("CDS HTTP call failed: %w", err)
