@@ -71,23 +71,30 @@ variable "db_user" {
   default = "trade"
 }
 
-# --- Beckn network identity — plain values carried over verbatim from
-#     docker-compose.yml, not GCP infra, so not made configurable per
-#     environment beyond a default here. ---
+# --- Beckn network identity ---
+# Single source of truth per side: this value appears BOTH in context.bapId/
+# bppId (every outbound message) AND as onix-bap/onix-bpp's own keyManager
+# networkParticipant. These two uses MUST always match — onix signs a
+# message using the keyset registered for whatever subscriber_id the message
+# itself claims to be from, so any mismatch here fails signing with "keyset
+# not found" (hit this for real: bap_id stayed at the old baptest1.remiges.tech
+# identity while the onix keyManager was updated to a new one, and every
+# outbound select/init/confirm broke). Previously two separate variables;
+# consolidated to one after that incident so they can't drift again.
 
 variable "bap_id" {
   type    = string
-  default = "baptest1.remiges.tech"
+  default = "onix-bap-x7m2wmy7nq-et.a.run.app"
 }
 
 variable "bpp_id" {
   type    = string
-  default = "bpptest1.remiges.tech"
+  default = "onix-bpp-x7m2wmy7nq-et.a.run.app"
 }
 
 variable "network_id" {
   type    = string
-  default = "ion.id/ion-winroom-0426"
+  default = "ion.id/ion-launch"
 }
 
 variable "cds_discover_url" {

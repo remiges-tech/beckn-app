@@ -123,18 +123,24 @@ services:
 
       LOG_LEVEL: info
 
-      BPP_ID: bpptest1.remiges.tech
-      BPP_URI: http://onix-bpp:8082/bpp/receiver
-      NETWORK_ID: ion.id/ion-winroom-0426
+      # bpptest1.remiges.tech retired — onix-bpp-x7m2wmy7nq-et.a.run.app is the
+      # only currently-registered identity for this side (matches remiges-trade).
+      BPP_ID: onix-bpp-x7m2wmy7nq-et.a.run.app
+      # Bare registered Subscriber URL, not the internal /bpp/receiver path —
+      # goes straight into context.bppUri (matches remiges-trade).
+      BPP_URI: http://onix-bpp:8082
+      NETWORK_ID: ion.id/ion-launch
 
       # BppCallerURL is the ONIX BPP caller base URL used for outbound on_* callbacks.
       BPP_CALLER_URL: http://onix-bpp:8082/bpp/caller
 
       CDS_PUBLISH_URL: "https://fabric.nfh.global/beckn/catalog/publish" # BPP → CDS catalog publish endpoint
 
-      # Ed25519 signing key registered for bpptest1.remiges.tech — signs outbound
-      # requests to CDS_PUBLISH_URL (mirrors the keyManager config in
-      # config/local-simple-bpp.yaml). Sourced from the git-ignored root .env file.
+      # Ed25519 signing key registered for onix-bpp-x7m2wmy7nq-et.a.run.app —
+      # signs outbound requests to CDS_PUBLISH_URL, and is the SAME keypair as
+      # the onix keyManager below (one registered identity, one key). Mirrors
+      # the keyManager config in config/local-simple-bpp.yaml. Sourced from
+      # the git-ignored root .env file.
       BPP_PRIVATE_KEY: ${BPP_PRIVATE_KEY}
       BPP_KEY_ID: ${BPP_KEY_ID}
     ports:
@@ -166,23 +172,28 @@ services:
 
       LOG_LEVEL: info
 
-      BAP_ID: baptest1.remiges.tech
-      # BAP_URI goes in context.bapUri so the adapter/BPP knows where to send callbacks.
-      BAP_URI: http://onix-bap:8081/bap/receiver
-      NETWORK_ID: ion.id/ion-winroom-0426
+      # baptest1.remiges.tech retired — onix-bap-x7m2wmy7nq-et.a.run.app is the
+      # only currently-registered identity for this side (matches remiges-trade).
+      BAP_ID: onix-bap-x7m2wmy7nq-et.a.run.app
+      # Bare registered Subscriber URL, not the internal /bap/receiver path —
+      # goes straight into context.bapUri (matches remiges-trade).
+      BAP_URI: http://onix-bap:8081
+      NETWORK_ID: ion.id/ion-launch
 
       # BPP identity placed in context.bppId / context.bppUri.
-      BPP_ID: bpptest1.remiges.tech
-      BPP_URI: http://onix-bpp:8082/bpp/receiver
+      BPP_ID: onix-bpp-x7m2wmy7nq-et.a.run.app
+      BPP_URI: http://onix-bpp:8082
 
       # ADAPTER_URL is the ONIX BAP adapter the BAP actually POSTs to.
       ADAPTER_URL: http://onix-bap:8081/bap/caller
 
       CDS_DISCOVER_URL: "https://34.47.138.217.sslip.io/beckn/discover"
 
-      # Ed25519 signing key registered for baptest1.remiges.tech — signs outbound
-      # requests to CDS_DISCOVER_URL (mirrors the keyManager config in
-      # config/local-simple-bap.yaml). Sourced from the git-ignored root .env file.
+      # Ed25519 signing key registered for onix-bap-x7m2wmy7nq-et.a.run.app —
+      # signs outbound requests to CDS_DISCOVER_URL, and is the SAME keypair as
+      # the onix keyManager below (one registered identity, one key). Mirrors
+      # the keyManager config in config/local-simple-bap.yaml. Sourced from
+      # the git-ignored root .env file.
       BAP_PRIVATE_KEY: ${BAP_PRIVATE_KEY}
       BAP_KEY_ID: ${BAP_KEY_ID}
     ports:

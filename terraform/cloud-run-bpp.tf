@@ -123,7 +123,7 @@ resource "google_cloud_run_v2_service" "bpp" {
       # patches in the real onix-bpp URL.
       env {
         name  = "BPP_URI"
-        value = "https://placeholder.invalid/bpp/receiver"
+        value = "https://placeholder.invalid"
       }
       env {
         name  = "BPP_CALLER_URL"

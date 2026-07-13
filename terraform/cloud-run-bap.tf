@@ -102,8 +102,10 @@ resource "google_cloud_run_v2_service" "bap" {
         value = var.bpp_id
       }
       env {
+        # Bare registered Subscriber URL for onix-bpp, not the internal
+        # /bpp/receiver path — this goes straight into context.bppUri.
         name  = "BPP_URI"
-        value = "${google_cloud_run_v2_service.onix_bpp.uri}/bpp/receiver"
+        value = google_cloud_run_v2_service.onix_bpp.uri
       }
       env {
         name  = "CDS_DISCOVER_URL"
@@ -137,7 +139,7 @@ resource "google_cloud_run_v2_service" "bap" {
       # patches in the real onix-bap URL.
       env {
         name  = "BAP_URI"
-        value = "https://placeholder.invalid/bap/receiver"
+        value = "https://placeholder.invalid"
       }
       env {
         name  = "ADAPTER_URL"
