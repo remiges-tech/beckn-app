@@ -38,6 +38,15 @@ type Config struct {
 	// Example: https://cds.example.com/discover
 	// Leave blank in environments without a live CDS (returns empty catalog list).
 	CDSDiscoverURL string
+
+	// BapPrivateKey is the base64-encoded Ed25519 private key (64 bytes) or seed (32 bytes)
+	// used to sign outbound Beckn requests. Required when CDSDiscoverURL is set.
+	// Env: BAP_PRIVATE_KEY
+	BapPrivateKey string
+
+	// BapKeyID is the Beckn signing key identifier in the format
+	// "<subscriberID>|<uniqueKeyID>|ed25519". Env: BAP_KEY_ID
+	BapKeyID string
 }
 
 // Load reads all config values from the environment and returns a validated Config.
@@ -64,6 +73,9 @@ func Load() (*Config, error) {
 		BapCallerURL: getEnv("BAP_CALLER_URL", os.Getenv("ADAPTER_URL")),
 
 		CDSDiscoverURL: os.Getenv("CDS_DISCOVER_URL"),
+
+		BapPrivateKey: os.Getenv("BAP_PRIVATE_KEY"),
+		BapKeyID:      os.Getenv("BAP_KEY_ID"),
 	}
 
 	if err := cfg.validate(); err != nil {

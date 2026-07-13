@@ -115,6 +115,15 @@ func (s *ClientService) Discover(ctx context.Context, req *ClientDiscoverRequest
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	if s.cfg.BapPrivateKey != "" {
+		authHeader, authErr := becknAuthHeader(reqJSON, s.cfg.BapKeyID, s.cfg.BapPrivateKey)
+		if authErr != nil {
+			callErr = fmt.Errorf("build Beckn Authorization header: %w", authErr)
+			return nil, callErr
+		}
+		httpReq.Header.Set("Authorization", authHeader)
+	}
+
 	resp, err := s.client.Do(httpReq)
 	if err != nil {
 		callErr = fmt.Errorf("discover HTTP call failed: %w", err)
@@ -228,7 +237,7 @@ func buildSelectMessage(items []SelectItem, bapID string) ([]byte, error) {
 			"id":     cid,
 			"status": map[string]interface{}{"descriptor": map[string]interface{}{"code": "DRAFT"}},
 			"resources": []map[string]interface{}{
-				{"id": item.ResourceID},
+				{"id": item.ResourceID, "quantity": map[string]interface{}{"unitCode": "EA", "unitQuantity": qty}},
 			},
 			"offer": map[string]interface{}{
 				"id":          item.OfferID,
