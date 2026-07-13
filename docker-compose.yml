@@ -198,6 +198,10 @@ services:
     restart: unless-stopped
     depends_on:
       - bap
+    environment:
+      BAP_URL: http://bap:8083
+      # 127.0.0.11 is Docker's embedded DNS, resolves compose service names.
+      NGINX_RESOLVER: "127.0.0.11 8.8.8.8 8.8.4.4"
     ports:
       - "3000:80"
     networks:
@@ -211,6 +215,9 @@ services:
     restart: unless-stopped
     depends_on:
       - bpp
+    environment:
+      BPP_URL: http://bpp:8080
+      NGINX_RESOLVER: "127.0.0.11 8.8.8.8 8.8.4.4"
     ports:
       - "3001:80"
     networks:

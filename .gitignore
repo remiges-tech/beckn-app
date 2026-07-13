@@ -4,3 +4,11 @@ bap-application/cmd/server/.env
 bpp-application/cmd/server/.env
 config/local-simple-bap.yaml
 config/local-simple-bpp.yaml
+
+# Terraform local state/cache/vars — state lives in GCS, not here.
+# .terraform.lock.hcl IS committed (pins exact provider versions).
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+terraform/*.tfplan

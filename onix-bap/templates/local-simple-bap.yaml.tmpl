@@ -1,0 +1,155 @@
+appName: "onix-local"
+log:
+  level: debug
+  destinations:
+    - type: stdout
+  contextKeys:
+    - transaction_id
+    - message_id
+    - subscriber_id
+    - module_id
+http:
+  port: 8081
+  timeout:
+    read: 30
+    write: 30
+    idle: 30
+pluginManager:
+  root: ./plugins
+modules:
+  - name: bapTxnReceiver
+    path: /bap/receiver/
+    handler:
+      type: std
+      role: bap
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 30s
+      plugins:
+        registry:
+          id: dediregistry
+          config:
+            url: https://fabric.nfh.global/registry/dedi
+            timeout: 10
+            retry_max: 3
+            retry_wait_min: 100ms
+            retry_wait_max: 500ms
+        keyManager:
+          id: simplekeymanager
+          config:
+            networkParticipant: ${NETWORK_PARTICIPANT}
+            keyId: ${BAP_ONIX_KEY_ID}
+            signingPrivateKey: ${BAP_ONIX_SIGNING_PRIVATE_KEY}
+            signingPublicKey: ${BAP_ONIX_SIGNING_PUBLIC_KEY}
+            encrPrivateKey: ${BAP_ONIX_ENCR_PRIVATE_KEY}
+            encrPublicKey: ${BAP_ONIX_ENCR_PUBLIC_KEY}
+        schemaValidator:
+          id: schemav2validator
+          config:
+            type: url
+            location: https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/tags/core-v2.0.0-lts/api/v2.0.0/beckn.yaml
+            cacheTTL: "3600"
+            extendedSchema_enabled: "true"
+            extendedSchema_cacheTTL: "86400"
+            extendedSchema_maxCacheSize: "100"
+            extendedSchema_downloadTimeout: "30"
+            extendedSchema_allowedDomains: "raw.githubusercontent.com,schema.beckn.io"
+        cache:
+          id: cache
+          config:
+            addr: ${REDIS_ADDR}
+        signValidator:
+          id: signvalidator
+        signer:
+          id: signer
+        router:
+          id: router
+          config:
+            routingConfig: ./config/local-simple-routing-BAPReceiver.yaml
+        payloadStore:
+          id: payloadstore
+          config:
+            ttl: "24h"
+            indexTTL: "25h"
+            storeSignature: "true"
+        middleware:
+          - id: reqpreprocessor
+            config:
+              contextKeys: transactionId,messageId
+              role: bap
+      steps:
+        - validateSign
+        - addRoute
+        - validateSchema
+        - signAck
+
+  - name: bapTxnCaller
+    path: /bap/caller/
+    handler:
+      type: std
+      role: bap
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 30s
+      plugins:
+        registry:
+          id: dediregistry
+          config:
+            url: https://fabric.nfh.global/registry/dedi
+            timeout: 10
+            retry_max: 3
+            retry_wait_min: 100ms
+            retry_wait_max: 500ms
+        keyManager:
+          id: simplekeymanager
+          config:
+            networkParticipant: ${NETWORK_PARTICIPANT}
+            keyId: ${BAP_ONIX_KEY_ID}
+            signingPrivateKey: ${BAP_ONIX_SIGNING_PRIVATE_KEY}
+            signingPublicKey: ${BAP_ONIX_SIGNING_PUBLIC_KEY}
+            encrPrivateKey: ${BAP_ONIX_ENCR_PRIVATE_KEY}
+            encrPublicKey: ${BAP_ONIX_ENCR_PUBLIC_KEY}
+        schemaValidator:
+          id: schemav2validator
+          config:
+            type: url
+            location: https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/tags/core-v2.0.0-lts/api/v2.0.0/beckn.yaml
+            cacheTTL: "3600"
+            extendedSchema_enabled: "true"
+            extendedSchema_cacheTTL: "86400"
+            extendedSchema_maxCacheSize: "100"
+            extendedSchema_downloadTimeout: "30"
+            extendedSchema_allowedDomains: "raw.githubusercontent.com,schema.beckn.io"
+        cache:
+          id: cache
+          config:
+            addr: ${REDIS_ADDR}
+        router:
+          id: router
+          config:
+            routingConfig: ./config/local-simple-routing-BAPCaller.yaml
+        signer:
+          id: signer
+        signValidator:
+          id: signvalidator
+        payloadStore:
+          id: payloadstore
+          config:
+            ttl: "24h"
+            indexTTL: "25h"
+            storeSignature: "true"
+        middleware:
+          - id: reqpreprocessor
+            config:
+              contextKeys: transactionId,messageId
+              role: bap
+      steps:
+        - addRoute
+        - sign
+        - storePayload
+        - validateSchema
+        - validateAckSign
